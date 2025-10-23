@@ -1,0 +1,28 @@
+@"
+# Entornos virtuales
+venv/
+.venv/
+env/
+ENV/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Config/local
+.env
+*.log
+*.db
+*.sqlite3
+
+# Binarios pesados (por las dudas)
+*.pt
+*.pth
+*.onnx
+*.dll
+*.pyd
+*.zip
+*.rar
+*.tar
+*.gz
+"@ | Out-File -Encoding utf8 .gitignore

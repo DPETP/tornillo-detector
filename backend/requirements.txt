@@ -1,0 +1,15 @@
+Flask
+Flask-SQLAlchemy
+Flask-JWT-Extended
+Flask-CORS
+python-dotenv
+PyYAML
+opencv-python
+ultralytics
+torch
+torchvision
+numpy
+Pillow
+requests
+SQLAlchemy
+python-dateutil
