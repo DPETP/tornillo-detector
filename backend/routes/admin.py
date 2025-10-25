@@ -43,7 +43,7 @@ def admin_required(f):
 def registrar_auditoria(usuario_id, accion, tabla, registro_id=None, detalles_anteriores='', detalles_nuevos=''):
     """Registra una acción en la auditoría"""
     log = AuditLog(
-        usuario_id=usuario_id,
+        usuario_id=int(usuario_id),
         accion=accion,
         tabla_afectada=tabla,
         registro_id=registro_id,

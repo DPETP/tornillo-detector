@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configuración - Control de Calidad</title>
+    <link rel="stylesheet" href="/css/styles.css">
+    <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="logo">
+                <span class="logo-icon">🔧</span>
+                <div>
+                    <div class="logo-text">Configuración</div>
+                    <div class="logo-subtext">Admin</div>
+                </div>
+            </div>
+
+            <nav class="menu">
+                <button class="menu-item active" data-section="usuarios">
+                    <span class="icon">👥</span> Usuarios
+                </button>
+                <button class="menu-item" data-section="modelos">
+                    <span class="icon">📋</span> Modelos AA
+                </button>
+                <button class="menu-item" data-section="motores">
+                    <span class="icon">⚙️</span> Motores IA
+                </button>
+                <button class="menu-item" data-section="configuracion">
+                    <span class="icon">⚡</span> Configuración
+                </button>
+            </nav>
+
+            <div class="bgh-logo">
+                <img src="assets/bgh-logo.png" alt="BGH Logo">
+            </div>
+
+            <button class="logout-btn" onclick="logout()">
+                <span class="icon">🚪</span> Cerrar Sesión
+            </button>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header class="header">
+                <h1>Panel de Configuración</h1>
+                <div class="header-info">
+                    <span id="user-info">Admin</span>
+                </div>
+            </header>
+
+            <div id="alerts-container"></div>
+
+            <!-- USUARIOS -->
+            <section id="usuarios" class="config-section active-section">
+                <h3>Gestión de Usuarios</h3>
+                <button class="btn btn-primary" onclick="openUserModal()">+ Crear Usuario</button>
+                <table class="table" id="usuarios-table">
+                    <thead>
+                        <tr>
+                            <th>Usuario</th>
+                            <th>Email</th>
+                            <th>Rol</th>
+                            <th>Equipo</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="usuarios-tbody">
+                        <tr><td colspan="6" style="text-align: center;">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- MODELOS -->
+            <section id="modelos" class="config-section">
+                <h3>Modelos de Aire Acondicionado</h3>
+                <button class="btn btn-primary" onclick="openModelModal()">+ Crear Modelo</button>
+                <table class="table" id="modelos-table">
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Tornillos</th>
+                            <th>Confianza</th>
+                            <th>Motor IA</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modelos-tbody">
+                        <tr><td colspan="6" style="text-align: center;">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- MOTORES -->
+            <section id="motores" class="config-section">
+                <h3>Motores de IA</h3>
+                <button class="btn btn-primary" onclick="openEngineModal()">+ Cargar Motor IA</button>
+                <table class="table" id="motores-table">
+                    <thead>
+                        <tr>
+                            <th>Tipo</th>
+                            <th>Versión</th>
+                            <th>Tamaño</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="motores-tbody">
+                        <tr><td colspan="5" style="text-align: center;">Cargando...</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- CONFIGURACIÓN -->
+            <section id="configuracion" class="config-section">
+                <h3>Configuración Global</h3>
+                <div class="form-group">
+                    <label for="modelo-activo">Modelo de AA Activo:</label>
+                    <select id="modelo-activo" onchange="updateConfiguration()">
+                        <option value="">-- Seleccionar --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="registro-publico" onchange="updateConfiguration()">
+                        Permitir Registro Público
+                    </label>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- MODAL USUARIOS -->
+    <div id="userModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="userModalTitle">Crear Usuario</h2>
+                <button class="close" onclick="closeUserModal()">&times;</button>
+            </div>
+            <form id="userForm" onsubmit="saveUser(event)">
+                <div class="form-group">
+                    <label for="username">Usuario:</label>
+                    <input type="text" id="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="email">Email:</label>
+                    <input type="email" id="email" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Contraseña:</label>
+                    <input type="password" id="password">
+                </div>
+                <div class="form-group">
+                    <label for="role">Rol:</label>
+                    <select id="role">
+                        <option value="operario">Operario</option>
+                        <option value="soporte_tecnico">Soporte Técnico</option>
+                        <option value="admin">Administrador</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="team">Equipo:</label>
+                    <input type="text" id="team">
+                </div>
+                <div class="button-group">
+                    <button type="button" class="btn btn-secondary" onclick="closeUserModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL MODELOS -->
+    <div id="modelModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Crear Modelo de AA</h2>
+                <button class="close" onclick="closeModelModal()">&times;</button>
+            </div>
+            <form id="modelForm" onsubmit="saveModel(event)">
+                <div class="form-group">
+                    <label for="nombre-modelo">Nombre:</label>
+                    <input type="text" id="nombre-modelo" placeholder="Ej: Modelo XYZ-2024" required>
+                </div>
+                <div class="form-group">
+                    <label for="descripcion-modelo">Descripción:</label>
+                    <textarea id="descripcion-modelo"></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="target-tornillos">Tornillos Objetivo:</label>
+                    <input type="number" id="target-tornillos" min="1" value="24" required>
+                </div>
+                <div class="form-group">
+                    <label for="confidence-threshold">Umbral de Confianza:</label>
+                    <input type="number" id="confidence-threshold" min="0" max="1" step="0.1" value="0.5" required>
+                </div>
+                <div class="form-group">
+                    <label for="motor-select">Motor IA:</label>
+                    <select id="motor-select" required>
+                        <option value="">-- Seleccionar --</option>
+                    </select>
+                </div>
+                <div class="button-group">
+                    <button type="button" class="btn btn-secondary" onclick="closeModelModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Guardar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL MOTORES -->
+    <div id="engineModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Cargar Motor de IA</h2>
+                <button class="close" onclick="closeEngineModal()">&times;</button>
+            </div>
+            <form id="engineForm" onsubmit="saveEngine(event)" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="engine-type">Tipo de Motor:</label>
+                    <select id="engine-type" required>
+                        <option value="">-- Seleccionar --</option>
+                        <option value="yolo">YOLO v8</option>
+                        <option value="mask_rcnn">Mask R-CNN</option>
+                        <option value="rtdetr">RT-DETR</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="engine-version">Versión:</label>
+                    <input type="text" id="engine-version" placeholder="Ej: 8.0" required>
+                </div>
+                <div class="form-group">
+                    <label for="engine-file">Archivo (.pt):</label>
+                    <input type="file" id="engine-file" accept=".pt" required>
+                </div>
+                <div class="form-group">
+                    <label for="engine-desc">Descripción:</label>
+                    <textarea id="engine-desc"></textarea>
+                </div>
+                <div class="button-group">
+                    <button type="button" class="btn btn-secondary" onclick="closeEngineModal()">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Cargar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="/js/admin.js"></script>
+</body>
+</html>

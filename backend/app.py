@@ -33,7 +33,7 @@ def create_app(config_name=None):
         config_name = os.getenv('FLASK_ENV', 'development')
     
     # Crear instancia de Flask
-    app = Flask(__name__)
+    app = Flask(__name__, static_folder='static', static_url_path='')
     
     # Cargar configuración
     app.config.from_object(config[config_name])
@@ -142,6 +142,7 @@ def create_app(config_name=None):
             'environment': config_name
         }), 200
     
+  
     @app.route('/api/health', methods=['GET'])
     def api_health():
         """Verificar salud de la API"""
@@ -150,6 +151,22 @@ def create_app(config_name=None):
             'message': 'API activa',
             'database': 'connected'
         }), 200
+    
+    # ============================================================
+    # SERVIR ARCHIVOS ESTÁTICOS
+    # ============================================================
+    
+    @app.route('/')
+    def index():
+        """Servir index.html"""
+        return app.send_static_file('index.html')
+    
+    @app.route('/<path:path>')
+    def serve_static(path):
+        """Servir archivos estáticos o index.html para SPA"""
+        if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
+            return app.send_static_file(path)
+        return app.send_static_file('index.html')
     
     return app
 
