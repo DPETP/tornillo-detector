@@ -4,7 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BGH - Dashboard</title>
-    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="/css/dashboard.css">
+    <!-- El guardián de autenticación se carga primero para proteger la ruta -->
+    <script src="/js/authGuard.js"></script>
 </head>
 <body class="dashboard-page">
     <div class="dashboard-container">
@@ -12,30 +14,33 @@
         <aside class="sidebar">
             <div class="sidebar-top">
                 <div class="user-profile">
-                    <img src="https://via.placeholder.com/40" alt="Usuario" class="avatar">
                     <div class="user-info">
-                        <span id="userName">Usuario</span>
-                        <small id="userTeam">Team</small>
+                        <!-- ID AÑADIDO para actualizar con JS -->
+                        <span id="user-info-name">Usuario</span>
+                        <!-- ID AÑADIDO para actualizar con JS -->
+                        <small id="user-info-team">Team</small>
                     </div>
                 </div>
             </div>
             
             <nav class="sidebar-nav">
-                <a href="dashboard.html" class="nav-item active">
+                <!-- IDs AÑADIDOS y href cambiado para control con JS -->
+                <a href="#" id="nav-dashboard" class="nav-item active">
                     <span class="icon">📊</span> Dashboard
                 </a>
-                <a href="detection.html" class="nav-item">
+                <a href="#" id="nav-detection" class="nav-item">
                     <span class="icon">🎥</span> Detección
                 </a>
-                <a href="#" class="nav-item">
+                <a href="#" id="nav-reportes" class="nav-item">
                     <span class="icon">📋</span> Reportes
                 </a>
-                <a href="configuration.html" class="nav-item">
+                <a href="#" id="nav-config" class="nav-item">
                     <span class="icon">⚙️</span> Configuración
                 </a>
             </nav>
             
             <div class="sidebar-bottom">
+                <!-- El ID ya estaba correcto -->
                 <button id="logoutBtn" class="btn-logout">
                     <span class="icon">🚪</span> Cerrar Sesión
                 </button>
@@ -58,19 +63,23 @@
                 <div class="cards-grid">
                     <div class="card">
                         <div class="card-label">Equipos Inspeccionados</div>
-                        <div class="card-value" id="totalInspections">0</div>
+                        <!-- ID AÑADIDO para actualizar con JS -->
+                        <div class="card-value" id="kpi-inspeccionados">0</div>
                     </div>
                     <div class="card">
                         <div class="card-label">Equipos PASS</div>
-                        <div class="card-value success" id="passedCount">0</div>
+                        <!-- ID AÑADIDO para actualizar con JS -->
+                        <div class="card-value success" id="kpi-pass">0</div>
                     </div>
                     <div class="card">
                         <div class="card-label">Equipos FAIL</div>
-                        <div class="card-value error" id="failedCount">0</div>
+                        <!-- ID AÑADIDO para actualizar con JS -->
+                        <div class="card-value error" id="kpi-fail">0</div>
                     </div>
                     <div class="card">
                         <div class="card-label">Latencia Promedio</div>
-                        <div class="card-value">0,87 s</div>
+                        <!-- ID AÑADIDO para actualizar con JS -->
+                        <div class="card-value" id="kpi-latencia">0.00 s</div>
                     </div>
                 </div>
 
@@ -79,21 +88,20 @@
                     <!-- CHART 1 -->
                     <div class="chart-container">
                         <h3>Detecciones por Quarter</h3>
+                        <!-- El ID del canvas ya estaba correcto -->
                         <canvas id="quarterChart"></canvas>
                     </div>
 
-                    <!-- RIGHT SIDEBAR -->
+                    <!-- RIGHT SIDEBAR (estos valores son estáticos por ahora) -->
                     <div class="right-sidebar">
                         <div class="info-box">
                             <label>Latencia Promedio</label>
                             <span class="info-value">0,87 s</span>
                         </div>
-                        
                         <div class="info-box">
                             <label>Estado de Cámaras</label>
                             <span class="info-value success">Conexión OK</span>
                         </div>
-                        
                         <div class="info-box">
                             <label>Up time</label>
                             <span class="info-value">99,3 %</span>
@@ -103,17 +111,19 @@
 
                 <!-- LOGO -->
                 <div class="dashboard-logo">
-                    <img src="https://via.placeholder.com/200x80" alt="BGH Logo" style="max-width: 200px;">
+                    <img src="/assets/logo.jpeg" alt="BGH Logo" style="max-width: 200px;">
                 </div>
 
                 <!-- BOTTOM CHARTS -->
                 <div class="bottom-charts">
                     <div class="small-chart">
-                        <h4>Distribuición de Detecciones</h4>
+                        <h4>Distribución de Detecciones</h4>
+                        <!-- El ID del canvas ya estaba correcto -->
                         <canvas id="distributionChart"></canvas>
                     </div>
                     <div class="small-chart">
                         <h4>Tendencia Mensual</h4>
+                        <!-- El ID del canvas ya estaba correcto -->
                         <canvas id="trendChart"></canvas>
                     </div>
                 </div>
@@ -121,7 +131,9 @@
         </main>
     </div>
 
-    <script src="js/api.js"></script>
-    <script src="js/dashboard.js"></script>
+    <!-- SCRIPTS CARGADOS AL FINAL EN ORDEN CORRECTO -->
+    <script src="/js/api.js"></script>
+    <script src="/js/dashboard.js"></script>
+    <script src="/js/navigation.js"></script>
 </body>
 </html>

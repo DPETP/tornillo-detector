@@ -1,49 +1,58 @@
+// =================================================================
+// REEMPLAZA EL CONTENIDO COMPLETO DE backend/static/js/main.js
+// =================================================================
 document.addEventListener('DOMContentLoaded', () => {
     const loginForm = document.getElementById('loginForm');
     const errorMessage = document.getElementById('errorMessage');
 
-    // Verificar si ya hay sesión iniciada
+    // --- LÓGICA DE REDIRECCIÓN CORREGIDA ---
+    // Si ya existe un token, el usuario ya está autenticado.
+    // Lo redirigimos a la página principal de la aplicación ('/dashboard').
     if (localStorage.getItem('accessToken')) {
-        window.location.href = 'dashboard.html';
-        return;
+        window.location.href = '/dashboard'; // USAR RUTA ABSOLUTA Y LIMPIA
+        return; // Detener la ejecución para evitar que se añadan listeners innecesarios
     }
 
-    loginForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
 
-        const username = document.getElementById('username').value;
-        const password = document.getElementById('password').value;
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
 
-        errorMessage.classList.remove('show');
-        errorMessage.textContent = '';
+            errorMessage.classList.remove('show');
+            errorMessage.textContent = '';
 
-        try {
-            const response = await api.login(username, password);
-            
-            // Guardar datos del usuario
-            localStorage.setItem('accessToken', response.access_token);
-            localStorage.setItem('user', JSON.stringify(response.user));
+            try {
+                // Asumimos que 'api' está disponible globalmente desde api.js
+                const response = await api.login(username, password);
+                
+                // Guardar datos del usuario y token
+                localStorage.setItem('accessToken', response.access_token);
+                localStorage.setItem('user', JSON.stringify(response.user));
 
-            // Redirigir al dashboard
-            setTimeout(() => {
-                window.location.href = 'dashboard.html';
-            }, 500);
-        } catch (error) {
-            errorMessage.textContent = 'Error en inicio de sesión. Verifique sus credenciales.';
-            errorMessage.classList.add('show');
-            console.error('Error:', error);
-        }
-    });
-    // Toggle password visibility
-const togglePassword = document.getElementById('togglePassword');
-const passwordInput = document.getElementById('password');
+                // Redirigir al dashboard INMEDIATAMENTE tras un login exitoso
+                window.location.href = '/dashboard'; // USAR RUTA ABSOLUTA Y LIMPIA
 
-if (togglePassword) {
-    togglePassword.addEventListener('click', (e) => {
-        e.preventDefault();
-        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-        passwordInput.setAttribute('type', type);
-        togglePassword.textContent = type === 'password' ? '👁️' : '👁️‍🗨️';
-    });
-}
+            } catch (error) {
+                errorMessage.textContent = 'Error en inicio de sesión. Verifique sus credenciales.';
+                errorMessage.classList.add('show');
+                console.error('Error de login:', error);
+            }
+        });
+    }
+
+    // Toggle password visibility (tu código estaba bien)
+    const togglePassword = document.getElementById('togglePassword');
+    const passwordInput = document.getElementById('password');
+
+    if (togglePassword) {
+        togglePassword.addEventListener('click', (e) => {
+            e.preventDefault();
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+            // Puedes mejorar los íconos si usas una librería como FontAwesome
+            togglePassword.textContent = type === 'password' ? '👁️' : '👁️‍🗨️';
+        });
+    }
 });

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BGH - Detección en Vivo</title>
+    <link rel="stylesheet" href="/css/detection.css">
+    <script src="/js/authGuard.js"></script>
+</head>
+<body class="detection-page">
+    <div class="detection-container">
+        <!-- SIDEBAR (Asumimos que es similar a la versión anterior) -->
+        <aside class="sidebar">
+            <nav class="sidebar-nav">
+                <a href="#" id="nav-dashboard" class="nav-item">📊</a>
+                <a href="#" id="nav-detection" class="nav-item active">🎥</a>
+            </nav>
+            <div class="sidebar-bottom">
+                <button id="logoutBtn" class="btn-logout">🚪</button>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT -->
+        <main class="main-content">
+            <header class="detection-header"><h1>Detección de Tornillos en Vivo</h1></header>
+
+            <div class="detection-content">
+                <!-- CONTENEDOR PRINCIPAL PARA VIDEO Y CANVAS -->
+                <div class="video-container">
+                    <video id="videoElement" playsinline autoplay muted style="display: none;"></video>
+                    <canvas id="canvasOverlay"></canvas>
+                    <div id="loading-spinner" class="spinner" style="display: none;"></div>
+                </div>
+
+                <!-- PANEL DE ESTADO DERECHO -->
+                <aside class="status-panel">
+                    <div class="status-box">
+                        <label>Dispositivo de Video</label>
+                        <select id="videoSourceSelect" class="video-select"></select>
+                    </div>
+                    <div class="status-box status-main">
+                        <label>ESTADO</label>
+                        <div id="statusBadge" class="status-badge-large waiting">ESPERANDO</div>
+                    </div>
+                    <div class="status-box">
+                        <label>Tornillos Detectados</label>
+                        <span class="status-value" id="detectionCount">0</span>
+                    </div>
+                    <div class="controls">
+                        <button id="startBtn" class="btn-control btn-primary">Iniciar</button>
+                        <button id="stopBtn" class="btn-control btn-secondary" disabled>Detener</button>
+                    </div>
+                </aside>
+            </div>
+        </main>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="/js/api.js"></script>
+    <script src="/js/navigation.js"></script>
+    <script src="/js/detector.js"></script>
+</body>
+</html>
