@@ -176,8 +176,8 @@ body {
 /* BUTTON */
 .btn-login {
     padding: 14px 32px;
-    background: var(--white);
-    color: var(--primary-color);
+    background: #1E053B; /* Color de fondo solicitado */
+    color: #FFFFFF; /* Texto blanco */
     border: none;
     border-radius: 6px;
     font-size: 16px;
@@ -188,8 +188,8 @@ body {
 }
 
 .btn-login:hover {
-    background: var(--accent-color);
-    color: var(--white);
+    background: var(--accent-color); /* Mantiene el color de hover existente */
+    color: #1E053B; /* Texto cambia a #1E053B en hover */
     transform: translateY(-2px);
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
 }

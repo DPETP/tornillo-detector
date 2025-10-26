@@ -1,8 +1,9 @@
 """
 Aplicación Flask principal para Tornillo Detector
+SOLUCIÓN PROFESIONAL Y DEFINITIVA
 """
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from flask_migrate import Migrate
@@ -21,19 +22,17 @@ migrate = Migrate()
 def create_app(config_name=None):
     """
     Factory function para crear la aplicación Flask
-    
-    Args:
-        config_name (str): Nombre de la configuración ('development', 'production', etc.)
-    
-    Returns:
-        Flask: Instancia de la aplicación Flask configurada
     """
     
     if config_name is None:
         config_name = os.getenv('FLASK_ENV', 'development')
     
-    # Crear instancia de Flask
-    app = Flask(__name__, static_folder='static', static_url_path='')
+    # Crear instancia de Flask con rutas de archivos estáticos correctas
+    app = Flask(
+        __name__,
+        static_folder=os.path.abspath('static'),
+        static_url_path=''
+    )
     
     # Cargar configuración
     app.config.from_object(config[config_name])
@@ -71,7 +70,6 @@ def create_app(config_name=None):
     
     @app.errorhandler(400)
     def bad_request(error):
-        """Error 400 - Solicitud Inválida"""
         return jsonify({
             'success': False,
             'error': 'Bad Request',
@@ -81,7 +79,6 @@ def create_app(config_name=None):
     
     @app.errorhandler(401)
     def unauthorized(error):
-        """Error 401 - No Autorizado"""
         return jsonify({
             'success': False,
             'error': 'Unauthorized',
@@ -91,7 +88,6 @@ def create_app(config_name=None):
     
     @app.errorhandler(403)
     def forbidden(error):
-        """Error 403 - Prohibido (Sin Permisos)"""
         return jsonify({
             'success': False,
             'error': 'Forbidden',
@@ -101,7 +97,6 @@ def create_app(config_name=None):
     
     @app.errorhandler(404)
     def not_found(error):
-        """Error 404 - No Encontrado"""
         return jsonify({
             'success': False,
             'error': 'Not Found',
@@ -111,7 +106,6 @@ def create_app(config_name=None):
     
     @app.errorhandler(422)
     def unprocessable_entity(error):
-        """Error 422 - Entidad No Procesable (Validación)"""
         return jsonify({
             'success': False,
             'error': 'Unprocessable Entity',
@@ -121,7 +115,6 @@ def create_app(config_name=None):
     
     @app.errorhandler(500)
     def internal_server_error(error):
-        """Error 500 - Error Interno del Servidor"""
         return jsonify({
             'success': False,
             'error': 'Internal Server Error',
@@ -135,17 +128,14 @@ def create_app(config_name=None):
     
     @app.route('/health', methods=['GET'])
     def health():
-        """Verificar que el servidor está corriendo"""
         return jsonify({
             'status': 'ok',
             'message': 'Servidor activo',
             'environment': config_name
         }), 200
     
-  
     @app.route('/api/health', methods=['GET'])
     def api_health():
-        """Verificar salud de la API"""
         return jsonify({
             'status': 'ok',
             'message': 'API activa',
@@ -153,20 +143,32 @@ def create_app(config_name=None):
         }), 200
     
     # ============================================================
-    # SERVIR ARCHIVOS ESTÁTICOS
+    # RUTAS PARA ARCHIVOS ESTÁTICOS Y SPA
     # ============================================================
     
     @app.route('/')
-    def index():
-        """Servir index.html"""
-        return app.send_static_file('index.html')
+    def serve_index():
+        """Servir index.html en raíz"""
+        return send_from_directory(app.static_folder, 'index.html')
     
-    @app.route('/<path:path>')
-    def serve_static(path):
-        """Servir archivos estáticos o index.html para SPA"""
-        if path != "" and os.path.exists(os.path.join(app.static_folder, path)):
-            return app.send_static_file(path)
-        return app.send_static_file('index.html')
+    @app.route('/<path:filename>')
+    def serve_files(filename):
+        """Servir archivos estáticos (css, js, assets, html)"""
+        # Construir ruta completa del archivo
+        file_path = os.path.join(app.static_folder, filename)
+        
+        # Si el archivo existe, servirlo
+        if os.path.isfile(file_path):
+            return send_from_directory(app.static_folder, filename)
+        
+        # Si es una ruta HTML (sin extensión), intentar con .html
+        if not os.path.splitext(filename)[1]:
+            html_path = os.path.join(app.static_folder, f'{filename}.html')
+            if os.path.isfile(html_path):
+                return send_from_directory(app.static_folder, f'{filename}.html')
+        
+        # Si no existe, devolver index.html (SPA fallback)
+        return send_from_directory(app.static_folder, 'index.html')
     
     return app
 

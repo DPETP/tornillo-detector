@@ -8,6 +8,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import os
+import json
 from datetime import datetime
 from functools import wraps
 
@@ -26,15 +27,22 @@ def admin_required(f):
     @wraps(f)
     @jwt_required()
     def decorated_function(*args, **kwargs):
-        current_user_id = get_jwt_identity()
-        user = User.query.get(current_user_id)
-        
-        if not user or user.role != 'admin':
+        try:
+            current_user_id = int(get_jwt_identity())
+            user = User.query.get(current_user_id)
+            
+            if not user or user.role != 'admin':
+                return jsonify({
+                    'success': False,
+                    'error': 'Forbidden',
+                    'message': 'Solo administradores pueden acceder'
+                }), 403
+        except Exception as e:
             return jsonify({
                 'success': False,
-                'error': 'Forbidden',
-                'message': 'Solo administradores pueden acceder'
-            }), 403
+                'error': 'Error validando token',
+                'message': str(e)
+            }), 401
         
         return f(*args, **kwargs)
     return decorated_function
@@ -42,17 +50,21 @@ def admin_required(f):
 
 def registrar_auditoria(usuario_id, accion, tabla, registro_id=None, detalles_anteriores='', detalles_nuevos=''):
     """Registra una acción en la auditoría"""
-    log = AuditLog(
-        usuario_id=int(usuario_id),
-        accion=accion,
-        tabla_afectada=tabla,
-        registro_id=registro_id,
-        detalles_anteriores=detalles_anteriores,
-        detalles_nuevos=detalles_nuevos,
-        ip_address=request.remote_addr
-    )
-    db.session.add(log)
-    db.session.commit()
+    try:
+        log = AuditLog(
+            usuario_id=int(usuario_id),
+            accion=accion,
+            tabla_afectada=tabla,
+            registro_id=registro_id,
+            detalles_anteriores=detalles_anteriores,
+            detalles_nuevos=detalles_nuevos,
+            ip_address=request.remote_addr
+        )
+        db.session.add(log)
+        db.session.commit()
+    except Exception as e:
+        print(f"Error en auditoría: {e}")
+        pass
 
 
 # ============================================================
@@ -65,10 +77,21 @@ def get_users():
     """Obtener lista de todos los usuarios"""
     try:
         users = User.query.all()
+        users_data = []
+        for user in users:
+            users_data.append({
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'role': user.role,
+                'team': user.team,
+                'is_active': user.is_active
+            })
+        
         return jsonify({
             'success': True,
-            'data': [user.to_dict() for user in users],
-            'total': len(users)
+            'data': users_data,
+            'total': len(users_data)
         }), 200
     except Exception as e:
         return jsonify({
@@ -88,7 +111,7 @@ def create_user():
         if not data.get('username') or not data.get('email') or not data.get('password'):
             return jsonify({
                 'success': False,
-                'error': 'Faltan datos requeridos'
+                'error': 'Faltan datos requeridos (username, email, password)'
             }), 400
         
         # Verificar si usuario ya existe
@@ -106,25 +129,34 @@ def create_user():
             team=data.get('team', 'Default Team'),
             role=data.get('role', 'operario'),
             is_active=True,
-            creado_por_id=get_jwt_identity()
+            creado_por_id=int(get_jwt_identity())
         )
         
         db.session.add(new_user)
-        db.session.commit()
+        db.session.flush()
         
         # Registrar en auditoría
         registrar_auditoria(
-            get_jwt_identity(),
+            int(get_jwt_identity()),
             'CREAR',
             'users',
             new_user.id,
-            detalles_nuevos=str(new_user.to_dict())
+            detalles_nuevos=f"Usuario: {new_user.username}, Email: {new_user.email}"
         )
+        
+        db.session.commit()
         
         return jsonify({
             'success': True,
             'message': 'Usuario creado exitosamente',
-            'data': new_user.to_dict()
+            'data': {
+                'id': new_user.id,
+                'username': new_user.username,
+                'email': new_user.email,
+                'role': new_user.role,
+                'team': new_user.team,
+                'is_active': new_user.is_active
+            }
         }), 201
         
     except Exception as e:
@@ -148,7 +180,7 @@ def update_user(user_id):
             }), 404
         
         data = request.get_json()
-        detalles_anteriores = str(user.to_dict())
+        detalles_anteriores = f"Usuario: {user.username}, Email: {user.email}, Rol: {user.role}"
         
         # Actualizar campos
         if 'email' in data:
@@ -157,26 +189,36 @@ def update_user(user_id):
             user.team = data['team']
         if 'role' in data:
             user.role = data['role']
-        if 'password' in data:
+        if 'password' in data and data['password']:
             user.password_hash = generate_password_hash(data['password'])
         
         user.updated_at = datetime.utcnow()
+        
+        detalles_nuevos = f"Usuario: {user.username}, Email: {user.email}, Rol: {user.role}"
+        
         db.session.commit()
         
         # Registrar en auditoría
         registrar_auditoria(
-            get_jwt_identity(),
+            int(get_jwt_identity()),
             'ACTUALIZAR',
             'users',
             user_id,
             detalles_anteriores=detalles_anteriores,
-            detalles_nuevos=str(user.to_dict())
+            detalles_nuevos=detalles_nuevos
         )
         
         return jsonify({
             'success': True,
             'message': 'Usuario actualizado exitosamente',
-            'data': user.to_dict()
+            'data': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'role': user.role,
+                'team': user.team,
+                'is_active': user.is_active
+            }
         }), 200
         
     except Exception as e:
@@ -199,19 +241,19 @@ def deactivate_user(user_id):
                 'error': 'Usuario no encontrado'
             }), 404
         
-        detalles_anteriores = str(user.to_dict())
+        detalles_anteriores = f"Usuario: {user.username}, Estado: Activo"
         user.is_active = False
         user.updated_at = datetime.utcnow()
         db.session.commit()
         
         # Registrar en auditoría
         registrar_auditoria(
-            get_jwt_identity(),
+            int(get_jwt_identity()),
             'DAR_DE_BAJA',
             'users',
             user_id,
             detalles_anteriores=detalles_anteriores,
-            detalles_nuevos=str(user.to_dict())
+            detalles_nuevos=f"Usuario: {user.username}, Estado: Inactivo"
         )
         
         return jsonify({
@@ -237,10 +279,22 @@ def get_ac_models():
     """Obtener lista de modelos de AA"""
     try:
         models = ACModel.query.filter_by(activo=True).all()
+        models_data = []
+        for model in models:
+            models_data.append({
+                'id': model.id,
+                'nombre': model.nombre,
+                'descripcion': model.descripcion,
+                'target_tornillos': model.target_tornillos,
+                'confidence_threshold': model.confidence_threshold,
+                'motor_inferencia_id': model.motor_inferencia_id,
+                'activo': model.activo
+            })
+        
         return jsonify({
             'success': True,
-            'data': [model.to_dict() for model in models],
-            'total': len(models)
+            'data': models_data,
+            'total': len(models_data)
         }), 200
     except Exception as e:
         return jsonify({
@@ -263,14 +317,6 @@ def create_ac_model():
                 'error': 'Faltan datos requeridos'
             }), 400
         
-        # Verificar que el motor existe
-        motor = InferenceEngine.query.get(data['motor_inferencia_id'])
-        if not motor:
-            return jsonify({
-                'success': False,
-                'error': 'Motor de inferencia no encontrado'
-            }), 404
-        
         # Crear modelo
         new_model = ACModel(
             nombre=data['nombre'],
@@ -278,26 +324,33 @@ def create_ac_model():
             target_tornillos=data.get('target_tornillos', 24),
             confidence_threshold=data.get('confidence_threshold', 0.5),
             motor_inferencia_id=data['motor_inferencia_id'],
-            creado_por_id=get_jwt_identity(),
+            creado_por_id=int(get_jwt_identity()),
             activo=True
         )
         
         db.session.add(new_model)
-        db.session.commit()
+        db.session.flush()
         
         # Registrar en auditoría
         registrar_auditoria(
-            get_jwt_identity(),
+            int(get_jwt_identity()),
             'CREAR',
             'ac_models',
             new_model.id,
-            detalles_nuevos=str(new_model.to_dict())
+            detalles_nuevos=f"Modelo: {new_model.nombre}"
         )
+        
+        db.session.commit()
         
         return jsonify({
             'success': True,
             'message': 'Modelo de AA creado exitosamente',
-            'data': new_model.to_dict()
+            'data': {
+                'id': new_model.id,
+                'nombre': new_model.nombre,
+                'target_tornillos': new_model.target_tornillos,
+                'confidence_threshold': new_model.confidence_threshold
+            }
         }), 201
         
     except Exception as e:
@@ -321,7 +374,6 @@ def update_ac_model(model_id):
             }), 404
         
         data = request.get_json()
-        detalles_anteriores = str(model.to_dict())
         
         # Actualizar campos
         if 'nombre' in data:
@@ -332,26 +384,22 @@ def update_ac_model(model_id):
             model.target_tornillos = data['target_tornillos']
         if 'confidence_threshold' in data:
             model.confidence_threshold = data['confidence_threshold']
-        if 'motor_inferencia_id' in data:
-            model.motor_inferencia_id = data['motor_inferencia_id']
         
         model.updated_at = datetime.utcnow()
         db.session.commit()
         
         # Registrar en auditoría
         registrar_auditoria(
-            get_jwt_identity(),
+            int(get_jwt_identity()),
             'ACTUALIZAR',
             'ac_models',
             model_id,
-            detalles_anteriores=detalles_anteriores,
-            detalles_nuevos=str(model.to_dict())
+            detalles_nuevos=f"Modelo: {model.nombre}"
         )
         
         return jsonify({
             'success': True,
-            'message': 'Modelo actualizado exitosamente',
-            'data': model.to_dict()
+            'message': 'Modelo actualizado exitosamente'
         }), 200
         
     except Exception as e:
@@ -374,17 +422,16 @@ def delete_ac_model(model_id):
                 'error': 'Modelo no encontrado'
             }), 404
         
-        detalles_anteriores = str(model.to_dict())
         model.activo = False
         db.session.commit()
         
         # Registrar en auditoría
         registrar_auditoria(
-            get_jwt_identity(),
+            int(get_jwt_identity()),
             'ELIMINAR',
             'ac_models',
             model_id,
-            detalles_anteriores=detalles_anteriores
+            detalles_nuevos=f"Modelo: {model.nombre} eliminado"
         )
         
         return jsonify({
@@ -410,10 +457,21 @@ def get_inference_engines():
     """Obtener lista de motores de IA"""
     try:
         engines = InferenceEngine.query.all()
+        engines_data = []
+        for engine in engines:
+            engines_data.append({
+                'id': engine.id,
+                'tipo': engine.tipo,
+                'version': engine.version,
+                'tamaño_archivo': engine.tamaño_archivo,
+                'activo': engine.activo,
+                'descripcion': engine.descripcion
+            })
+        
         return jsonify({
             'success': True,
-            'data': [engine.to_dict() for engine in engines],
-            'total': len(engines)
+            'data': engines_data,
+            'total': len(engines_data)
         }), 200
     except Exception as e:
         return jsonify({
@@ -472,27 +530,33 @@ def create_inference_engine():
             version=data.get('version'),
             ruta_archivo=upload_path,
             tamaño_archivo=file_size,
-            creado_por_id=get_jwt_identity(),
+            creado_por_id=int(get_jwt_identity()),
             activo=data.get('activo', False) == 'true',
             descripcion=data.get('descripcion', '')
         )
         
         db.session.add(new_engine)
-        db.session.commit()
+        db.session.flush()
         
         # Registrar en auditoría
         registrar_auditoria(
-            get_jwt_identity(),
+            int(get_jwt_identity()),
             'CARGAR',
             'inference_engines',
             new_engine.id,
             detalles_nuevos=f"Tipo: {new_engine.tipo}, Versión: {new_engine.version}"
         )
         
+        db.session.commit()
+        
         return jsonify({
             'success': True,
             'message': 'Motor de IA cargado exitosamente',
-            'data': new_engine.to_dict()
+            'data': {
+                'id': new_engine.id,
+                'tipo': new_engine.tipo,
+                'version': new_engine.version
+            }
         }), 201
         
     except Exception as e:
@@ -524,7 +588,7 @@ def activate_inference_engine(engine_id):
         
         # Registrar en auditoría
         registrar_auditoria(
-            get_jwt_identity(),
+            int(get_jwt_identity()),
             'ACTIVAR',
             'inference_engines',
             engine_id,
@@ -533,8 +597,85 @@ def activate_inference_engine(engine_id):
         
         return jsonify({
             'success': True,
-            'message': 'Motor activado exitosamente',
-            'data': engine.to_dict()
+            'message': 'Motor activado exitosamente'
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+# ============================================================
+# RUTAS: CONFIGURACIÓN GLOBAL
+# ============================================================
+
+@admin_bp.route('/settings', methods=['GET'])
+@admin_required
+def get_settings():
+    """Obtener configuración global"""
+    try:
+        settings = Settings.query.first()
+        if not settings:
+            settings = Settings()
+            db.session.add(settings)
+            db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'id': settings.id,
+                'ac_model_activo_id': settings.ac_model_activo_id,
+                'permitir_registro_publico': settings.permitir_registro_publico
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@admin_bp.route('/settings', methods=['PUT'])
+@admin_required
+def update_settings():
+    """Actualizar configuración global"""
+    try:
+        settings = Settings.query.first()
+        if not settings:
+            settings = Settings()
+        
+        data = request.get_json()
+        
+        # Actualizar campos
+        if 'ac_model_activo_id' in data:
+            settings.ac_model_activo_id = data['ac_model_activo_id']
+        if 'permitir_registro_publico' in data:
+            settings.permitir_registro_publico = data['permitir_registro_publico']
+        
+        settings.updated_at = datetime.utcnow()
+        db.session.add(settings)
+        db.session.commit()
+        
+        # Registrar en auditoría
+        registrar_auditoria(
+            int(get_jwt_identity()),
+            'ACTUALIZAR',
+            'settings',
+            settings.id,
+            detalles_nuevos='Configuración actualizada'
+        )
+        
+        return jsonify({
+            'success': True,
+            'message': 'Configuración actualizada exitosamente',
+            'data': {
+                'id': settings.id,
+                'ac_model_activo_id': settings.ac_model_activo_id,
+                'permitir_registro_publico': settings.permitir_registro_publico
+            }
         }), 200
         
     except Exception as e:
