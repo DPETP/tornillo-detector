@@ -7,8 +7,8 @@ import cv2
 import base64
 import numpy as np
 
-from vision.detector import YOLODetector
-from database.models import db, Detection # Ya no necesitamos User aquí
+from ..database.models import db, Detection, User
+from ..vision.detector import YOLODetector
 
 detection_bp = Blueprint('detection', __name__)
 

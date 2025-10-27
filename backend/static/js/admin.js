@@ -1,6 +1,5 @@
 // =================================================================
 //          ADMIN.JS - VERSIÓN FINAL, COMPLETA Y FUNCIONAL
-//          (Incluye toda la lógica sin abreviaturas)
 // =================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -14,7 +13,8 @@ document.addEventListener('DOMContentLoaded', () => {
         currentModelId: null,
         allUsers: [],
         allModels: [],
-        allEngines: []
+        allEngines: [],
+        settings: {} // Para guardar la configuración global
     };
     
     const API_URL = '/api/admin';
@@ -24,19 +24,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. REFERENCIAS AL DOM
     // -----------------------------------------------------------------
     const ui = {
-        // Tablas
         usuariosTbody: document.getElementById('usuarios-tbody'),
         modelosTbody: document.getElementById('modelos-tbody'),
         motoresTbody: document.getElementById('motores-tbody'),
-        // Modales
         userModal: document.getElementById('userModal'),
         modelModal: document.getElementById('modelModal'),
         engineModal: document.getElementById('engineModal'),
-        // Formularios
         userForm: document.getElementById('userForm'),
         modelForm: document.getElementById('modelForm'),
         engineForm: document.getElementById('engineForm'),
-        // Configuración Global
         modeloActivoSelect: document.getElementById('modelo-activo'),
         registroPublicoCheckbox: document.getElementById('registro-publico'),
         btnGuardarSettings: document.getElementById('btn-guardar-settings')
@@ -88,9 +84,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const actions = {
             'edit-user': () => openModal('userModal', state.allUsers.find(u => u.id === id)),
-            'deactivate-user': () => { if (confirm('¿Desactivar usuario?')) api.deactivateUser(id); },
+            'toggle-user-status': () => {
+                const user = state.allUsers.find(u => u.id === id);
+                const actionText = user.is_active ? 'desactivar' : 'activar';
+                if (confirm(`¿Estás seguro de ${actionText} a ${user.username}?`)) {
+                    api.toggleUserStatus(id);
+                }
+            },
+            'delete-user': () => {
+                if (confirm(`¡ADVERTENCIA! ¿Estás seguro de ELIMINAR permanentemente a este usuario? Esta acción no se puede deshacer.`)) {
+                    api.deleteUser(id);
+                }
+            },
             'edit-model': () => openModal('modelModal', state.allModels.find(m => m.id === id)),
-            'delete-model': () => { if (confirm('¿Eliminar modelo?')) api.deleteModel(id); },
+            'delete-model': () => { if (confirm('¿Eliminar modelo (marcar como inactivo)?')) api.deleteModel(id); },
             'activate-engine': () => api.activateEngine(id),
         };
 
@@ -118,6 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
             descripcion: document.getElementById('descripcion-modelo').value,
             target_tornillos: parseInt(document.getElementById('target-tornillos').value),
             confidence_threshold: parseFloat(document.getElementById('confidence-threshold').value),
+            inspection_cycle_time: parseInt(document.getElementById('inspection-cycle-time').value),
             motor_inferencia_id: parseInt(document.getElementById('motor-select').value),
         };
         await api.saveModel(state.currentModelId, data);
@@ -125,7 +133,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function handleEngineSubmit(e) {
         e.preventDefault();
-        const formData = new FormData(ui.engineForm);
+        const form = document.getElementById('engineForm');
+        if (form.querySelector('#engine-file').files.length === 0) {
+            showAlert('Por favor, selecciona un archivo .pt', 'danger');
+            return;
+        }
+        const formData = new FormData(form);
         await api.saveEngine(formData);
     }
 
@@ -164,6 +177,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     form.querySelector('#descripcion-modelo').value = entity.descripcion;
                     form.querySelector('#target-tornillos').value = entity.target_tornillos;
                     form.querySelector('#confidence-threshold').value = entity.confidence_threshold;
+                    form.querySelector('#inspection-cycle-time').value = entity.inspection_cycle_time;
                     form.querySelector('#motor-select').value = entity.motor_inferencia_id;
                 }
             },
@@ -188,14 +202,31 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderAll() {
-        // Renderizar tablas
-        ui.usuariosTbody.innerHTML = state.allUsers.map(user => `<tr><td>${user.username}</td><td>${user.email}</td><td>${user.role}</td><td>${user.team}</td><td><span class="badge ${user.is_active ? 'success' : 'danger'}">${user.is_active ? 'Activo' : 'Inactivo'}</span></td><td><button class="btn btn-sm" data-action="edit-user" data-id="${user.id}">Editar</button><button class="btn btn-sm danger" data-action="deactivate-user" data-id="${user.id}">Desactivar</button></td></tr>`).join('');
-        ui.motoresTbody.innerHTML = state.allEngines.map(engine => `<tr><td>${engine.tipo}</td><td>${engine.version}</td><td>${(engine.tamaño_archivo / 1024 / 1024).toFixed(2)}</td><td><span class="badge ${engine.activo ? 'success' : 'warning'}">${engine.activo ? 'Activo' : 'Inactivo'}</span></td><td>${!engine.activo ? `<button class="btn btn-sm success" data-action="activate-engine" data-id="${engine.id}">Activar</button>` : '<span>✓ Activo</span>'}</td></tr>`).join('');
-        ui.modelosTbody.innerHTML = state.allModels.map(model => `<tr><td>${model.nombre}</td><td>${model.target_tornillos}</td><td>${model.confidence_threshold}</td><td>${state.allEngines.find(e => e.id === model.motor_inferencia_id)?.tipo || 'N/A'}</td><td><span class="badge ${model.activo ? 'success' : 'danger'}">${model.activo ? 'Activo' : 'Inactivo'}</span></td><td><button class="btn btn-sm" data-action="edit-model" data-id="${model.id}">Editar</button><button class="btn btn-sm danger" data-action="delete-model" data-id="${model.id}">Eliminar</button></td></tr>`).join('');
+        // Render Users
+        ui.usuariosTbody.innerHTML = state.allUsers.map(user => {
+            const isActive = user.is_active;
+            const toggleButtonClass = isActive ? 'warning' : 'success';
+            const toggleButtonText = isActive ? 'Desactivar' : 'Activar';
+            return `<tr><td>${user.username}</td><td>${user.email}</td><td>${user.role}</td><td>${user.team}</td><td><span class="badge ${isActive ? 'success' : 'danger'}">${isActive ? 'Activo' : 'Inactivo'}</span></td><td><button class="btn btn-sm" data-action="edit-user" data-id="${user.id}">Editar</button><button class="btn btn-sm ${toggleButtonClass}" data-action="toggle-user-status" data-id="${user.id}">${toggleButtonText}</button><button class="btn btn-sm danger" data-action="delete-user" data-id="${user.id}">Eliminar</button></td></tr>`;
+        }).join('');
 
-        // Poblar desplegables
+        // Render Engines
+        ui.motoresTbody.innerHTML = state.allEngines.map(engine => `<tr><td>${engine.tipo}</td><td>${engine.version}</td><td>${(engine.tamaño_archivo / 1024 / 1024).toFixed(2)}</td><td><span class="badge ${engine.activo ? 'success' : 'warning'}">${engine.activo ? 'Activo' : 'Inactivo'}</span></td><td>${!engine.activo ? `<button class="btn btn-sm success" data-action="activate-engine" data-id="${engine.id}">Activar</button>` : '<span>✓ Activo</span>'}</td></tr>`).join('');
+
+        // Render Models
+        const activeModelId = state.settings.ac_model_activo_id;
+        ui.modelosTbody.innerHTML = state.allModels.map(model => {
+            const isCurrentlyActive = model.id === activeModelId;
+            const activeIndicator = isCurrentlyActive ? '<span class="active-indicator">★ En Uso</span>' : '';
+            return `<tr><td>${model.nombre} ${activeIndicator}</td><td>${model.target_tornillos}</td><td>${model.confidence_threshold}</td><td>${state.allEngines.find(e => e.id === model.motor_inferencia_id)?.tipo || 'N/A'}</td><td><span class="badge ${model.activo ? 'success' : 'danger'}">${model.activo ? 'Activo' : 'Inactivo'}</span></td><td><button class="btn btn-sm" data-action="edit-model" data-id="${model.id}">Editar</button><button class="btn btn-sm danger" data-action="delete-model" data-id="${model.id}">Eliminar</button></td></tr>`;
+        }).join('');
+
+        // Populate dropdowns
         document.getElementById('motor-select').innerHTML = `<option value="">-- Seleccionar --</option>` + state.allEngines.map(e => `<option value="${e.id}">${e.tipo} v${e.version}</option>`).join('');
         ui.modeloActivoSelect.innerHTML = `<option value="">-- Seleccionar --</option>` + state.allModels.filter(m => m.activo).map(m => `<option value="${m.id}">${m.nombre}</option>`).join('');
+        if (activeModelId) {
+            ui.modeloActivoSelect.value = activeModelId;
+        }
     }
 
     async function updateConfiguration() {
@@ -204,7 +235,11 @@ document.addEventListener('DOMContentLoaded', () => {
             permitir_registro_publico: ui.registroPublicoCheckbox.checked
         };
         const result = await api.makeRequest('/settings', 'PUT', data);
-        if (result) showAlert('Configuración guardada con éxito.');
+        if (result) {
+            showAlert('Configuración guardada con éxito.');
+            state.settings = result.data;
+            renderAll();
+        }
     }
 
     // -----------------------------------------------------------------
@@ -223,7 +258,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const response = await fetch(`${API_URL}${endpoint}`, options);
                 const result = await response.json();
                 if (!response.ok) {
-                    showAlert(result.message || result.error || 'Error', 'danger');
+                    showAlert(result.message || result.error || 'Error desconocido', 'danger');
                     return null;
                 }
                 return result;
@@ -233,14 +268,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         },
         reloadData: async () => {
+            const settingsResult = await api.makeRequest('/settings');
+            if (settingsResult) state.settings = settingsResult.data;
+
             await Promise.all([
                 api.makeRequest('/users').then(r => state.allUsers = r?.data || []),
                 api.makeRequest('/inference-engines').then(r => state.allEngines = r?.data || [])
             ]);
             await api.makeRequest('/ac-models').then(r => state.allModels = r?.data || []);
+            
             renderAll();
-            const settings = await api.makeRequest('/settings');
-            if (settings) populateSettingsForm(settings.data);
         },
         saveUser: async (id, data) => {
             const endpoint = id ? `/users/${id}` : '/users';
@@ -271,17 +308,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 await api.reloadData();
             }
         },
-        deactivateUser: async (id) => {
-            const result = await api.makeRequest(`/users/${id}/deactivate`, 'POST');
-            if (result) { showAlert('Usuario desactivado.'); await api.reloadData(); }
+        toggleUserStatus: async (id) => {
+            const result = await api.makeRequest(`/users/${id}/toggle-status`, 'POST');
+            if (result) { showAlert(result.message); await api.reloadData(); }
+        },
+        deleteUser: async (id) => {
+            const result = await api.makeRequest(`/users/${id}`, 'DELETE');
+            if (result) { showAlert(result.message); await api.reloadData(); }
         },
         deleteModel: async (id) => {
             const result = await api.makeRequest(`/ac-models/${id}`, 'DELETE');
-            if (result) { showAlert('Modelo eliminado.'); await api.reloadData(); }
+            if (result) { showAlert('Modelo eliminado (desactivado).'); await api.reloadData(); }
         },
         activateEngine: async (id) => {
             const result = await api.makeRequest(`/inference-engines/${id}/activate`, 'POST');
-            if (result) { showAlert('Motor activado.'); await api.reloadData(); }
+            if (result) { showAlert(result.message); await api.reloadData(); }
         },
     };
 

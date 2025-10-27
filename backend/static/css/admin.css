@@ -389,6 +389,16 @@ body {
     gap: 5px;
     flex-wrap: wrap;
 }
+/* Estilo para el indicador de modelo activo */
+.active-indicator {
+    margin-left: 8px;
+    padding: 2px 6px;
+    font-size: 0.8em;
+    font-weight: bold;
+    color: #fff;
+    background-color: #28a745; /* Verde éxito */
+    border-radius: 4px;
+}
 
 /* Responsivo */
 @media (max-width: 768px) {
@@ -420,4 +430,53 @@ body {
     .modal-content {
         max-width: 90%;
     }
+}
+/* Opcional: Estilo para los botones de acción en las tablas */
+.btn.danger {
+    background-color: #dc3545; /* Rojo */
+    color: white;
+}
+
+.btn.danger:hover {
+    background-color: #c82333;
+}
+
+.btn.warning {
+    background-color: #ffc107; /* Amarillo */
+    color: #212529;
+}
+
+.btn.warning:hover {
+    background-color: #e0a800;
+}
+
+.btn.success {
+    background-color: #28a745; /* Verde */
+    color: white;
+}
+
+.btn.success:hover {
+    background-color: #218838;
+}
+
+/* Opcional: Mejorar la apariencia de la insignia de estado */
+.badge {
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+    color: white;
+}
+
+.badge.success {
+    background-color: #28a745; /* Verde */
+}
+
+.badge.danger {
+    background-color: #dc3545; /* Rojo */
+}
+
+.badge.warning {
+    background-color: #ffc107; /* Amarillo */
+    color: #212529;
 }

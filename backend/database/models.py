@@ -5,7 +5,7 @@ Sistema de detección de tornillos con soporte para múltiples modelos de AA
 
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
-from database.env_config import metadata
+from .env_config import metadata
 import json
 
 db = SQLAlchemy(
@@ -122,6 +122,7 @@ class ACModel(db.Model):
     descripcion = db.Column(db.Text, default='')
     target_tornillos = db.Column(db.Integer, nullable=False, default=24)
     confidence_threshold = db.Column(db.Float, nullable=False, default=0.5)
+    inspection_cycle_time = db.Column(db.Integer, default=20) # Tiempo en segundos por defecto
     motor_inferencia_id = db.Column(db.Integer, db.ForeignKey('inference_engines.id'), nullable=False)
     creado_por_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     activo = db.Column(db.Boolean, default=True, index=True)
@@ -144,6 +145,7 @@ class ACModel(db.Model):
             'descripcion': self.descripcion,
             'target_tornillos': self.target_tornillos,
             'confidence_threshold': self.confidence_threshold,
+            'inspection_cycle_time': self.inspection_cycle_time,
             'motor_inferencia_id': self.motor_inferencia_id,
             'activo': self.activo,
             'created_at': self.created_at.isoformat(),

@@ -11,8 +11,8 @@ import os
 from datetime import datetime
 from functools import wraps
 
-from database.models import db, User, ACModel, InferenceEngine, Settings
-from config import DevelopmentConfig
+from ..database.models import db, User, ACModel, InferenceEngine, AuditLog, Settings
+from ..config import DevelopmentConfig
 
 admin_bp = Blueprint('admin', __name__)
 
@@ -72,14 +72,37 @@ def update_user(current_admin_id, user_id):
     db.session.commit()
     return jsonify(success=True, message='Usuario actualizado', data=user.to_dict())
 
-@admin_bp.route('/users/<int:user_id>/deactivate', methods=['POST'])
+@admin_bp.route('/users/<int:user_id>/toggle-status', methods=['POST'])
 @admin_required
-def deactivate_user(current_admin_id, user_id):
+def toggle_user_status(current_admin_id, user_id):
+    """Activa o desactiva un usuario (soft delete)."""
     user = User.query.get_or_404(user_id)
+    
+    # Evitar que un admin se desactive a sí mismo
+    if user.id == current_admin_id:
+        return jsonify(success=False, message="No puedes cambiar tu propio estado."), 403
+
     user.is_active = not user.is_active
     db.session.commit()
+    
     status = "activado" if user.is_active else "desactivado"
-    return jsonify(success=True, message=f'Usuario {status} exitosamente')
+    return jsonify(success=True, message=f'Usuario {user.username} {status} exitosamente.')
+
+# Añade esta nueva función para la eliminación permanente
+@admin_bp.route('/users/<int:user_id>', methods=['DELETE'])
+@admin_required
+def delete_user(current_admin_id, user_id):
+    """Elimina un usuario permanentemente de la base de datos."""
+    user = User.query.get_or_404(user_id)
+
+    # Medida de seguridad: no permitir que un admin se elimine a sí mismo
+    if user.id == current_admin_id:
+        return jsonify(success=False, message="No puedes eliminar tu propia cuenta."), 403
+    
+    db.session.delete(user)
+    db.session.commit()
+    
+    return jsonify(success=True, message=f'Usuario {user.username} eliminado permanentemente.')
 
 # ============================================================
 # RUTAS: GESTIÓN DE MODELOS DE AA (REESTRUCTURADO)
@@ -101,6 +124,7 @@ def handle_ac_models(current_admin_id):
             nombre=data['nombre'], descripcion=data.get('descripcion', ''),
             target_tornillos=data['target_tornillos'],
             confidence_threshold=data.get('confidence_threshold', 0.5),
+            inspection_cycle_time=data.get('inspection_cycle_time', 20),
             motor_inferencia_id=data['motor_inferencia_id'],
             creado_por_id=current_admin_id
         )
@@ -108,13 +132,26 @@ def handle_ac_models(current_admin_id):
         db.session.commit()
         return jsonify(success=True, message='Modelo de AA creado', data=new_model.to_dict()), 201
 
-@admin_bp.route('/ac-models/<int:model_id>', methods=['DELETE'])
+@admin_bp.route('/ac-models/<int:model_id>', methods=['PUT', 'DELETE'])
 @admin_required
-def delete_ac_model(current_admin_id, model_id):
+def handle_single_ac_model(current_admin_id, model_id):
     model = ACModel.query.get_or_404(model_id)
-    model.activo = False
-    db.session.commit()
-    return jsonify(success=True, message='Modelo eliminado (desactivado)')
+
+    if request.method == 'PUT':
+        data = request.get_json()
+        model.nombre = data.get('nombre', model.nombre)
+        model.descripcion = data.get('descripcion', model.descripcion)
+        model.target_tornillos = data.get('target_tornillos', model.target_tornillos)
+        model.confidence_threshold = data.get('confidence_threshold', model.confidence_threshold)
+        model.inspection_cycle_time = data.get('inspection_cycle_time', model.inspection_cycle_time)
+        model.motor_inferencia_id = data.get('motor_inferencia_id', model.motor_inferencia_id)
+        db.session.commit()
+        return jsonify(success=True, message='Modelo AA actualizado', data=model.to_dict())
+
+    if request.method == 'DELETE':
+        model.activo = False  # Soft delete
+        db.session.commit()
+        return jsonify(success=True, message='Modelo AA eliminado (desactivado)')
 
 # ============================================================
 # RUTAS: GESTIÓN DE MOTORES DE IA (REESTRUCTURADO)

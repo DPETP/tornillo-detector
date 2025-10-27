@@ -152,6 +152,9 @@ async function detectionLoop() {
 
         // --- Paso 3: Llama a la API y maneja los resultados ---
         const result = await api.processFrame(imageData);
+
+        // Imprimimos en la consola la respuesta COMPLETA que viene del backend.
+        console.log("Respuesta del Backend:", result);
         
         if (result && result.success) {
             // Si la API responde correctamente, dibuja las detecciones

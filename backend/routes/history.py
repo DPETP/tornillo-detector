@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from database.models import db, User, Detection
+from ..database.models import db, User, Detection
 from datetime import datetime, timedelta
 
 history_bp = Blueprint('history', __name__)
