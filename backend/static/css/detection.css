@@ -312,30 +312,50 @@ body {
 }
 
 .status-badge-large {
-    font-size: 32px;
-    font-weight: 900;
+    font-size: 2em; /* Puedes ajustar el tamaño si es necesario */
+    font-weight: bold;
+    padding: 20px 10px;
+    border-radius: 8px;
     text-align: center;
-    padding: 15px;
-    border-radius: 12px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    word-wrap: break-word;
-    overflow-wrap: break-word;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+/* --- NUEVOS ESTILOS DE COLOR --- */
+.status-badge-large.waiting {
+    background-color: #ffc107; /* Amarillo */
+    color: #002366; /* Azul Francia Oscuro */
+}
+
+.status-badge-large.processing {
+    background-color: #ffc107; /* Amarillo */
+    color: #002366; /* Azul Francia Oscuro */
+    animation: pulse 1.5s infinite; /* Efecto de pulso para indicar actividad */
 }
 
 .status-badge-large.pass {
-    background: var(--success-color);
-    color: var(--white);
+    background-color: #28a745; /* Verde */
+    color: white;
 }
 
 .status-badge-large.fail {
-    background: var(--error-color);
-    color: var(--white);
+    background-color: #dc3545; /* Rojo */
+    color: white;
 }
 
-.status-badge-large.waiting {
-    background: var(--warning-color);
-    color: var(--white);
+/* Animación de pulso para el estado "processing" */
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.05);
+        opacity: 0.9;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 1;
+    }
 }
 
 /* CONTROLS */
@@ -350,3 +370,4 @@ body {
     padding: 10px;
     border: none;
     border-radius: 6px;
+}

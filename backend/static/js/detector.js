@@ -1,12 +1,15 @@
 // =================================================================
-// CÓDIGO FINAL Y FUNCIONAL para backend/static/js/detector.js
+//          DETECTOR.JS - VERSIÓN FINAL, CORREGIDA Y COMPLETA
 // =================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- ESTADO Y REFERENCIAS AL DOM ---
-    let stream;
-    let isStreamingActive = false;
-    let animationFrameId;
+    let stream, animationFrameId, inspectionInterval;
+    let isInspecting = false;
+    let maxDetectionsInCycle = 0;
+    let config = { target_tornillos: 0, confidence_threshold: 0.5, inspection_cycle_time: 20, model_name: "N/A" };
+    let stats = { totalInspected: 0, totalPass: 0, totalFail: 0 };
+    let currentConfidence = 0.5;
 
     const ui = {
         video: document.getElementById('videoElement'),
@@ -16,194 +19,196 @@ document.addEventListener('DOMContentLoaded', () => {
         stopBtn: document.getElementById('stopBtn'),
         statusBadge: document.getElementById('statusBadge'),
         detectionCount: document.getElementById('detectionCount'),
-        videoSourceSelect: document.getElementById('videoSourceSelect'),
-        spinner: document.getElementById('loading-spinner')
+        modelName: document.getElementById('modelName'),
+        cycleTimeSlider: document.getElementById('cycleTimeSlider'),
+        cycleTimeLabel: document.getElementById('cycleTimeLabel'),
+        confidenceSlider: document.getElementById('confidenceSlider'),
+        confidenceLabel: document.getElementById('confidenceLabel'),
+        totalInspected: document.getElementById('total-inspected'),
+        totalPass: document.getElementById('total-pass'),
+        totalFail: document.getElementById('total-fail'),
+        videoSourceSelect: document.getElementById('videoSourceSelect')
     };
 
-    // --- LÓGICA DE INICIALIZACIÓN ---
-    function setupEventListeners() {
-        ui.startBtn.addEventListener('click', startDetection);
-        ui.stopBtn.addEventListener('click', stopDetection);
-        ui.videoSourceSelect.addEventListener('change', startDetection);
+    // --- INICIALIZACIÓN ---
+    async function initializeApp() {
+        setupEventListeners();
+        await populateCameraList();
+        try {
+            const result = await api.getDetectionConfig();
+            config = result.data;
+            ui.modelName.textContent = config.model_name;
+            ui.cycleTimeSlider.value = config.inspection_cycle_time;
+            ui.cycleTimeLabel.textContent = config.inspection_cycle_time;
+            ui.confidenceSlider.value = config.confidence_threshold * 100;
+            ui.confidenceLabel.textContent = Math.round(config.confidence_threshold * 100);
+            currentConfidence = config.confidence_threshold;
+            updateDetectionCountUI();
+        } catch (error) {
+            alert(`Error al cargar la configuración: ${error.message}.`);
+            ui.startBtn.disabled = true;
+        }
     }
-    
-    // --- LÓGICA DE LA CÁMARA Y DETECCIÓN ---
-    async function getCameraDevices() {
+
+    function setupEventListeners() {
+        ui.startBtn.addEventListener('click', startInspectionCycle);
+        ui.stopBtn.addEventListener('click', stopDetection);
+        ui.cycleTimeSlider.addEventListener('input', e => ui.cycleTimeLabel.textContent = e.target.value);
+        ui.confidenceSlider.addEventListener('input', e => {
+            currentConfidence = e.target.value / 100;
+            ui.confidenceLabel.textContent = e.target.value;
+        });
+        ui.videoSourceSelect.addEventListener('change', () => {
+            if (isInspecting || (stream && stream.active)) {
+                stopDetection();
+                startInspectionCycle();
+            }
+        });
+    }
+
+    // --- LÓGICA DE CÁMARA E INSPECCIÓN ---
+    async function populateCameraList() {
         try {
             const devices = await navigator.mediaDevices.enumerateDevices();
             const videoDevices = devices.filter(device => device.kind === 'videoinput');
-            
             ui.videoSourceSelect.innerHTML = '';
             if (videoDevices.length === 0) {
-                alert('No se encontraron cámaras.');
+                ui.videoSourceSelect.innerHTML = '<option>No se encontraron cámaras</option>';
+                ui.startBtn.disabled = true;
                 return;
             }
-
             videoDevices.forEach((device, index) => {
                 const option = document.createElement('option');
                 option.value = device.deviceId;
                 option.text = device.label || `Cámara ${index + 1}`;
                 ui.videoSourceSelect.appendChild(option);
             });
-        } catch (error) {
-            console.error("Error al enumerar dispositivos:", error);
-        }
+        } catch (error) { console.error("Error al enumerar dispositivos:", error); }
     }
 
-// =================================================================
-// REEMPLAZA ESTA FUNCIÓN COMPLETA en backend/static/js/detector.js
-// =================================================================
-async function startDetection() {
-    if (isStreamingActive) {
-        stopDetection(); 
-    }
-    
-    isStreamingActive = true;
-    ui.startBtn.disabled = true;
-    ui.stopBtn.disabled = false;
-    ui.spinner.style.display = 'block';
-    ui.statusBadge.className = 'status-badge-large processing';
-    ui.statusBadge.textContent = 'INICIANDO...';
-
-    const deviceId = ui.videoSourceSelect.value;
-    const constraints = { 
-        video: { 
-            deviceId: deviceId ? { exact: deviceId } : undefined,
-            // Pedimos una resolución común para mejorar la compatibilidad
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-        } 
-    };
-
-    console.log("Intentando iniciar la cámara con 'constraints':", JSON.stringify(constraints));
-
-    try {
+    async function startCamera() {
+        const deviceId = ui.videoSourceSelect.value;
+        if (!deviceId) throw new Error("No hay una cámara seleccionada.");
+        const constraints = { video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } };
         stream = await navigator.mediaDevices.getUserMedia(constraints);
         ui.video.srcObject = stream;
-        
-        // --- CAMBIO CLAVE AQUÍ ---
-        // 1. Añadimos un event listener que espera a que el video REALMENTE empiece a reproducirse.
-        ui.video.addEventListener('playing', () => {
-            console.log("¡El video ha comenzado a reproducirse!");
-
-            // 2. Solo cuando el video se está reproduciendo, ajustamos el canvas e iniciamos el bucle.
-            // Esto garantiza que no intentamos dibujar un frame negro.
-            ui.canvas.width = ui.video.videoWidth;
-            ui.canvas.height = ui.video.videoHeight;
-            ui.spinner.style.display = 'none';
-            
-            // Cancelar cualquier bucle anterior por si acaso
-            cancelAnimationFrame(animationFrameId); 
-            
-            // Iniciar el bucle de detección
-            detectionLoop(); 
-        }, { once: true }); // { once: true } hace que este listener se ejecute solo una vez.
-
-        // 3. Le damos la orden de reproducir al elemento de video.
-        // El listener 'playing' de arriba se disparará cuando esto tenga éxito.
-        await ui.video.play();
-
-    } catch (error) {
-        console.error("Error al acceder a la cámara:", error);
-        alert("No se pudo acceder a la cámara. Revise los permisos o si está en uso por otra aplicación.");
-        stopDetection();
-    }
-
-
-}
-
-    function stopDetection() {
-        isStreamingActive = false;
-        cancelAnimationFrame(animationFrameId);
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-        }
-        ui.startBtn.disabled = false;
-        ui.stopBtn.disabled = true;
-        ui.ctx.clearRect(0, 0, ui.canvas.width, ui.canvas.height);
-        ui.statusBadge.className = 'status-badge-large waiting';
-        ui.statusBadge.textContent = 'ESPERANDO';
-        ui.detectionCount.textContent = '0';
-    }
-
-    // --- BUCLE DE DETECCIÓN Y DIBUJO ---
-    // =================================================================
-// REEMPLAZA ESTA FUNCIÓN COMPLETA en backend/static/js/detector.js
-// =================================================================
-async function detectionLoop() {
-    // Si el streaming se detuvo, salimos del bucle.
-    if (!isStreamingActive) {
-        return;
-    }
-
-    try {
-        // --- Paso 1: Dibuja el frame actual en el canvas principal ---
-        // Esto asegura que el usuario siempre vea el video en vivo,
-        // incluso si la detección falla.
-        ui.ctx.drawImage(ui.video, 0, 0, ui.canvas.width, ui.canvas.height);
-        
-        // --- Paso 2: Prepara una imagen más pequeña para enviar a la API ---
-        const canvasForProcessing = document.createElement('canvas');
-        canvasForProcessing.width = 640;
-        canvasForProcessing.height = 480;
-        const ctxProcessing = canvasForProcessing.getContext('2d');
-        ctxProcessing.drawImage(ui.video, 0, 0, 640, 480);
-        const imageData = canvasForProcessing.toDataURL('image/jpeg', 0.7);
-
-        // --- Paso 3: Llama a la API y maneja los resultados ---
-        const result = await api.processFrame(imageData);
-
-        // Imprimimos en la consola la respuesta COMPLETA que viene del backend.
-        console.log("Respuesta del Backend:", result);
-        
-        if (result && result.success) {
-            // Si la API responde correctamente, dibuja las detecciones
-            drawDetections(result.detections);
-            updateStatus(result);
-        }
-
-    } catch (error) {
-        // Si hay un error (ej. la red falla), lo mostramos en la consola
-        // pero NO detenemos el bucle.
-        console.error("Error en un ciclo de detección:", error);
-    }
-
-    // --- Paso 4: Vuelve a llamar a la función para el siguiente frame ---
-    // Esta es la clave. La llamada recursiva está FUERA del try...catch,
-    // asegurando que el bucle continúe incluso si hay un error puntual.
-    animationFrameId = requestAnimationFrame(detectionLoop);
-}
-
-    function drawDetections(detections) {
-        // Redibujar el frame de video para limpiar los rectángulos anteriores
-        ui.ctx.drawImage(ui.video, 0, 0, ui.canvas.width, ui.canvas.height);
-        
-        detections.forEach(det => {
-            const [x1, y1, x2, y2] = det.box;
-            
-            // Re-escalar las coordenadas si el tamaño de procesamiento es diferente al de visualización
-            const scaleX = ui.canvas.width / 640;
-            const scaleY = ui.canvas.height / 480;
-
-            ui.ctx.strokeStyle = 'lime'; // Verde para las detecciones
-            ui.ctx.lineWidth = 4;
-            ui.ctx.strokeRect(x1 * scaleX, y1 * scaleY, (x2 - x1) * scaleX, (y2 - y1) * scaleY);
-            
-            // Dibujar etiqueta con confianza
-            ui.ctx.fillStyle = 'lime';
-            ui.ctx.font = '24px Arial';
-            const label = `${det.class_name} ${(det.confidence * 100).toFixed(0)}%`;
-            ui.ctx.fillText(label, (x1 * scaleX), (y1 * scaleY) - 10);
+        return new Promise((resolve, reject) => {
+            ui.video.onplaying = () => {
+                ui.canvas.width = ui.video.videoWidth;
+                ui.canvas.height = ui.video.videoHeight;
+                resolve();
+            };
+            ui.video.play().catch(reject);
         });
     }
 
-    function updateStatus(result) {
-        ui.detectionCount.textContent = result.detections.length;
-        ui.statusBadge.textContent = result.status;
-        ui.statusBadge.className = `status-badge-large ${result.status.toLowerCase()}`;
+    function stopDetection() {
+        isInspecting = false;
+        cancelAnimationFrame(animationFrameId);
+        clearInterval(inspectionInterval);
+        if (stream) stream.getTracks().forEach(track => track.stop());
+        stream = null;
+        ui.startBtn.disabled = false;
+        ui.stopBtn.disabled = true;
+        [ui.cycleTimeSlider, ui.confidenceSlider, ui.videoSourceSelect].forEach(el => el.disabled = false);
+        setStatus('DETENIDO', 'waiting');
     }
 
-    // --- INICIAR LA PÁGINA ---
-    setupEventListeners();
-    getCameraDevices();
+    async function startInspectionCycle() {
+        try {
+            [ui.startBtn, ui.stopBtn, ui.cycleTimeSlider, ui.confidenceSlider, ui.videoSourceSelect].forEach(el => el.disabled = true);
+            ui.stopBtn.disabled = false;
+            setStatus('INICIANDO...', 'processing');
+            await startCamera();
+            
+            isInspecting = true;
+            maxDetectionsInCycle = 0;
+            updateDetectionCountUI();
+            let timeLeft = ui.cycleTimeSlider.value;
+            setStatus(`EN CURSO... ${timeLeft}s`, 'processing');
+
+            inspectionInterval = setInterval(() => {
+                timeLeft--;
+                if (isInspecting) setStatus(`EN CURSO... ${timeLeft}s`, 'processing');
+                if (timeLeft <= 0) {
+                    clearInterval(inspectionInterval);
+                    if (isInspecting) finishInspectionCycle();
+                }
+            }, 1000);
+            detectionLoop();
+        } catch(error) {
+            console.error("Fallo al iniciar el ciclo de inspección:", error);
+            alert(`No se pudo iniciar la cámara: ${error.message}`);
+            stopDetection();
+        }
+    }
+    
+    async function finishInspectionCycle() {
+        isInspecting = false;
+        cancelAnimationFrame(animationFrameId);
+        stats.totalInspected++;
+        const finalStatus = maxDetectionsInCycle === config.target_tornillos ? 'PASS' : 'FAIL';
+        finalStatus === 'PASS' ? stats.totalPass++ : stats.totalFail++;
+        setStatus(finalStatus, finalStatus.toLowerCase());
+        updateStatsUI();
+        await api.saveInspectionResult({
+            status: finalStatus,
+            detection_count: maxDetectionsInCycle,
+            expected_count: config.target_tornillos,
+            confidence: currentConfidence,
+            model_name: config.model_name
+        });
+        setTimeout(() => {
+            if (stream && stream.active) { // Solo reinicia si no se ha detenido manualmente
+                startInspectionCycle();
+            }
+        }, 3000);
+    }
+    
+    async function detectionLoop() {
+        if (!isInspecting) return;
+        try {
+            ui.ctx.drawImage(ui.video, 0, 0, ui.canvas.width, ui.canvas.height);
+            const canvasForProcessing = document.createElement('canvas');
+            canvasForProcessing.width = 640; canvasForProcessing.height = 480;
+            canvasForProcessing.getContext('2d').drawImage(ui.video, 0, 0, 640, 480);
+            const imageData = canvasForProcessing.toDataURL('image/jpeg', 0.7);
+            const result = await api.processFrame(imageData);
+            if (isInspecting && result && result.success) {
+                const filteredDetections = result.detections.filter(d => d.confidence >= currentConfidence);
+                if (filteredDetections.length > maxDetectionsInCycle) {
+                    maxDetectionsInCycle = filteredDetections.length;
+                    updateDetectionCountUI();
+                }
+                drawDetections(filteredDetections);
+            }
+        } catch (error) { console.error("Error en ciclo de detección:", error); }
+        animationFrameId = requestAnimationFrame(detectionLoop);
+    }
+    
+    // --- FUNCIONES DE UTILIDAD ---
+    function setStatus(text, className) {
+        ui.statusBadge.textContent = text;
+        ui.statusBadge.className = `status-badge-large ${className}`;
+    }
+    function updateDetectionCountUI() { ui.detectionCount.textContent = `${maxDetectionsInCycle} / ${config.target_tornillos}`; }
+    function updateStatsUI() { ui.totalInspected.textContent = stats.totalInspected; ui.totalPass.textContent = stats.totalPass; ui.totalFail.textContent = stats.totalFail; }
+    
+    function drawDetections(detections) {
+        detections.forEach(det => {
+            const [x1, y1, x2, y2] = det.box;
+            const scaleX = ui.canvas.width / 640;
+            const scaleY = ui.canvas.height / 480;
+            ui.ctx.strokeStyle = '#00FF00';
+            ui.ctx.lineWidth = 3;
+            ui.ctx.strokeRect(x1 * scaleX, y1 * scaleY, (x2 - x1) * scaleX, (y2 - y1) * scaleY);
+            ui.ctx.fillStyle = '#00FF00';
+            ui.ctx.font = 'bold 18px Arial';
+            const label = `${(det.confidence * 100).toFixed(0)}%`;
+            ui.ctx.fillText(label, (x1 * scaleX), (y1 * scaleY) > 20 ? (y1 * scaleY) - 5 : (y2 * scaleY) + 20);
+        });
+    }
+
+    // --- PUNTO DE ENTRADA ---
+    initializeApp();
 });

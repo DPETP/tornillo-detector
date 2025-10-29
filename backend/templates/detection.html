@@ -9,53 +9,77 @@
 </head>
 <body class="detection-page">
     <div class="detection-container">
-        <!-- SIDEBAR (Asumimos que es similar a la versión anterior) -->
+        <!-- Sidebar -->
         <aside class="sidebar">
             <nav class="sidebar-nav">
                 <a href="#" id="nav-dashboard" class="nav-item">📊</a>
                 <a href="#" id="nav-detection" class="nav-item active">🎥</a>
+                <a href="#" id="nav-config" class="nav-item">⚙️</a>
             </nav>
             <div class="sidebar-bottom">
                 <button id="logoutBtn" class="btn-logout">🚪</button>
             </div>
         </aside>
 
-        <!-- MAIN CONTENT -->
+        <!-- Main Content -->
         <main class="main-content">
-            <header class="detection-header"><h1>Detección de Tornillos en Vivo</h1></header>
-
+            <header class="detection-header">
+                <h1>Detección: <span id="modelName">Cargando...</span></h1>
+            </header>
             <div class="detection-content">
-                <!-- CONTENEDOR PRINCIPAL PARA VIDEO Y CANVAS -->
                 <div class="video-container">
                     <video id="videoElement" playsinline autoplay muted style="display: none;"></video>
                     <canvas id="canvasOverlay"></canvas>
-                    <div id="loading-spinner" class="spinner" style="display: none;"></div>
                 </div>
-
-                <!-- PANEL DE ESTADO DERECHO -->
                 <aside class="status-panel">
+                    <!-- === CAMBIO IMPORTANTE AQUÍ: Selector de Cámara === -->
                     <div class="status-box">
                         <label>Dispositivo de Video</label>
                         <select id="videoSourceSelect" class="video-select"></select>
                     </div>
+
+                    <!-- Contadores de Estadísticas -->
+                    <div class="status-box counters">
+                        <div><label>Analizados</label><span id="total-inspected">0</span></div>
+                        <div><label>Pass</label><span id="total-pass" class="success">0</span></div>
+                        <div><label>Fail</label><span id="total-fail" class="error">0</span></div>
+                    </div>
+
+                    <!-- Estado Principal del Ciclo -->
                     <div class="status-box status-main">
                         <label>ESTADO</label>
                         <div id="statusBadge" class="status-badge-large waiting">ESPERANDO</div>
                     </div>
+
+                    <!-- Conteo de Tornillos del Ciclo Actual -->
                     <div class="status-box">
-                        <label>Tornillos Detectados</label>
-                        <span class="status-value" id="detectionCount">0</span>
+                        <label>Tornillos Detectados (Máx)</label>
+                        <span class="status-value" id="detectionCount">0 / ?</span>
                     </div>
+
+                    <!-- Slider para Tiempo de Ciclo -->
+                    <div class="status-box slider-group">
+                        <label for="cycleTimeSlider">Tiempo de Ciclo: <span id="cycleTimeLabel">20</span>s</label>
+                        <input type="range" min="5" max="60" value="20" class="slider" id="cycleTimeSlider">
+                    </div>
+
+                    <!-- Slider para Confianza Mínima -->
+                    <div class="status-box slider-group">
+                        <label for="confidenceSlider">Confianza Mínima: <span id="confidenceLabel">50</span>%</label>
+                        <input type="range" min="10" max="95" value="50" class="slider" id="confidenceSlider">
+                    </div>
+                    
+                    <!-- Controles -->
                     <div class="controls">
-                        <button id="startBtn" class="btn-control btn-primary">Iniciar</button>
+                        <button id="startBtn" class="btn-control btn-primary">Iniciar Ciclo</button>
                         <button id="stopBtn" class="btn-control btn-secondary" disabled>Detener</button>
                     </div>
                 </aside>
             </div>
         </main>
     </div>
-
-    <!-- SCRIPTS -->
+    
+    <!-- Scripts -->
     <script src="/js/api.js"></script>
     <script src="/js/navigation.js"></script>
     <script src="/js/detector.js"></script>

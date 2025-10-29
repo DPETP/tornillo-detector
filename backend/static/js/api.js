@@ -1,9 +1,8 @@
 // =================================================================
-//          API.JS - VERSIÓN FINAL Y 100% CORREGIDA
-// Corregido el error de sintaxis de las comillas (template literals)
+//          API.JS - VERSIÓN FINAL CON TODAS LAS FUNCIONES
 // =================================================================
 
-const API_URL = '/api'; // Usar una ruta relativa es más robusto
+const API_URL = '/api';
 
 class API {
     constructor() {
@@ -22,12 +21,11 @@ class API {
         localStorage.setItem('accessToken', token);
     }
 
-    // Método de utilidad para manejar las respuestas de fetch
     async _handleResponse(response) {
         if (!response.ok) {
-            const errorData = await response.json().catch(() => ({ message: 'Error desconocido' }));
+            const errorData = await response.json().catch(() => ({ message: `HTTP error ${response.status}` }));
             console.error(`Error de API (${response.status}):`, errorData);
-            throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+            throw new Error(errorData.error || errorData.message);
         }
         return response.json();
     }
@@ -48,8 +46,6 @@ class API {
 
     // DETECTION ENDPOINTS
     async processFrame(frameData) {
-        // --- ¡AQUÍ ESTABA EL ERROR PRINCIPAL! ---
-        // Se usaban comillas simples en lugar de comillas invertidas.
         const response = await fetch(`${API_URL}/detection/process-frame`, {
             method: 'POST',
             headers: this.getHeaders(),
@@ -57,7 +53,22 @@ class API {
         });
         return this._handleResponse(response);
     }
+
+    async getDetectionConfig() {
+        const response = await fetch(`${API_URL}/detection/config`, { headers: this.getHeaders() });
+        return this._handleResponse(response);
+    }
+
+    async saveInspectionResult(data) {
+        const response = await fetch(`${API_URL}/detection/save-inspection`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(data)
+        });
+        return this._handleResponse(response);
+    }
     
+    // --- FUNCIÓN RESTAURADA Y NECESARIA ---
     // DASHBOARD ENDPOINTS
     async getDashboardOverview() {
         const response = await fetch(`${API_URL}/dashboard/overview`, {
@@ -67,28 +78,18 @@ class API {
         return this._handleResponse(response);
     }
 
-    // --- MÉTODOS RESTANTES (Corregidos por si acaso, aunque no se usen aún) ---
-    
-    async getProfile() {
-        const response = await fetch(`${API_URL}/auth/me`, {
-            method: 'GET',
-            headers: this.getHeaders()
-        });
+
+    // --- ¡NUEVAS FUNCIONES! ---
+    async getDetectionConfig() {
+        const response = await fetch(`${API_URL}/detection/config`, { headers: this.getHeaders() });
         return this._handleResponse(response);
     }
 
-    async getDetectionHistory(limit = 50) {
-        const response = await fetch(`${API_URL}/detection/history/${limit}`, {
-            method: 'GET',
-            headers: this.getHeaders()
-        });
-        return this._handleResponse(response);
-    }
-
-    async getTeamStats() {
-        const response = await fetch(`${API_URL}/dashboard/team-stats`, {
-            method: 'GET',
-            headers: this.getHeaders()
+    async saveInspectionResult(data) {
+        const response = await fetch(`${API_URL}/detection/save-inspection`, {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify(data)
         });
         return this._handleResponse(response);
     }

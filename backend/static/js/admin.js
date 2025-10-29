@@ -214,11 +214,26 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.motoresTbody.innerHTML = state.allEngines.map(engine => `<tr><td>${engine.tipo}</td><td>${engine.version}</td><td>${(engine.tamaño_archivo / 1024 / 1024).toFixed(2)}</td><td><span class="badge ${engine.activo ? 'success' : 'warning'}">${engine.activo ? 'Activo' : 'Inactivo'}</span></td><td>${!engine.activo ? `<button class="btn btn-sm success" data-action="activate-engine" data-id="${engine.id}">Activar</button>` : '<span>✓ Activo</span>'}</td></tr>`).join('');
 
         // Render Models
-        const activeModelId = state.settings.ac_model_activo_id;
+            const activeModelId = state.settings.ac_model_activo_id;
         ui.modelosTbody.innerHTML = state.allModels.map(model => {
             const isCurrentlyActive = model.id === activeModelId;
             const activeIndicator = isCurrentlyActive ? '<span class="active-indicator">★ En Uso</span>' : '';
-            return `<tr><td>${model.nombre} ${activeIndicator}</td><td>${model.target_tornillos}</td><td>${model.confidence_threshold}</td><td>${state.allEngines.find(e => e.id === model.motor_inferencia_id)?.tipo || 'N/A'}</td><td><span class="badge ${model.activo ? 'success' : 'danger'}">${model.activo ? 'Activo' : 'Inactivo'}</span></td><td><button class="btn btn-sm" data-action="edit-model" data-id="${model.id}">Editar</button><button class="btn btn-sm danger" data-action="delete-model" data-id="${model.id}">Eliminar</button></td></tr>`;
+        return `
+            <tr>
+                <td>${model.nombre} ${activeIndicator}</td>
+                <td>${model.target_tornillos}</td>
+                <td>${model.confidence_threshold}</td>
+                
+                <!-- === LÍNEA AÑADIDA AQUÍ === -->
+                <td>${model.inspection_cycle_time}s</td>
+                
+                <td>${state.allEngines.find(e => e.id === model.motor_inferencia_id)?.tipo || 'N/A'}</td>
+                <td><span class="badge ${model.activo ? 'success' : 'danger'}">${model.activo ? 'Activo' : 'Inactivo'}</span></td>
+                <td>
+                    <button class="btn btn-sm" data-action="edit-model" data-id="${model.id}">Editar</button>
+                    <button class="btn btn-sm danger" data-action="delete-model" data-id="${model.id}">Eliminar</button>
+                </td>
+            </tr>`;
         }).join('');
 
         // Populate dropdowns
