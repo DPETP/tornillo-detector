@@ -144,4 +144,5 @@ Este proyecto es una base sólida con un gran potencial de crecimiento. Las pró
 
 ---
 
-Desarrollado por [Tu Nombre/Equipo].
+Desarrollado por Equipo de Practicas Profesionalizantes:
+-   [ ] **Mamani, Rafael.** - **Saldivia, Eduardo.** - **Demari, Monica.** - **Iñigo, Abigail.** - **Saldivia, Eduardo.** 
