@@ -62,7 +62,24 @@ function updateKpiCards(data) {
     document.getElementById('kpi-inspeccionados').textContent = data.total_inspections || 0;
     document.getElementById('kpi-pass').textContent = data.passed || 0;
     document.getElementById('kpi-fail').textContent = data.failed || 0;
-    document.getElementById('kpi-latencia').textContent = `${(data.average_inference_time || 0).toFixed(2)} s`;
+    
+    // Actualizar latencia con el nuevo dato del backend
+    const latenciaEl = document.getElementById('kpi-latencia');
+    if (latenciaEl) {
+        latenciaEl.textContent = `${data.average_inference_time || 0} s`;
+    }
+    
+    // Actualizar pass rate si existe el elemento
+    const passRateEl = document.getElementById('kpi-pass-rate');
+    if (passRateEl) {
+        passRateEl.textContent = `${data.pass_rate || 0}%`;
+    }
+    
+    // Actualizar confianza promedio si existe el elemento
+    const confidenceEl = document.getElementById('kpi-confidence');
+    if (confidenceEl) {
+        confidenceEl.textContent = `${data.average_confidence || 0}%`;
+    }
 }
 
 /**

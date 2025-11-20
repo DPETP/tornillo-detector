@@ -90,16 +90,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const deviceId = ui.videoSourceSelect.value;
         if (!deviceId) throw new Error("No hay una cámara seleccionada.");
         const constraints = { video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } };
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
-        ui.video.srcObject = stream;
-        return new Promise((resolve, reject) => {
-            ui.video.onplaying = () => {
-                ui.canvas.width = ui.video.videoWidth;
-                ui.canvas.height = ui.video.videoHeight;
-                resolve();
-            };
-            ui.video.play().catch(reject);
-        });
+        
+        try {
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+            ui.video.srcObject = stream;
+            
+            return new Promise((resolve, reject) => {
+                ui.video.onloadedmetadata = () => {
+                    ui.video.play()
+                        .then(() => {
+                            ui.canvas.width = ui.video.videoWidth;
+                            ui.canvas.height = ui.video.videoHeight;
+                            console.log(`Cámara activada: ${ui.video.videoWidth}x${ui.video.videoHeight}`);
+                            resolve();
+                        })
+                        .catch(reject);
+                };
+                ui.video.onerror = () => reject(new Error('Error al cargar el video'));
+            });
+        } catch (error) {
+            console.error('Error al acceder a la cámara:', error);
+            throw new Error(`No se pudo acceder a la cámara: ${error.message}`);
+        }
     }
 
     function stopDetection() {
@@ -190,6 +202,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function setStatus(text, className) {
         ui.statusBadge.textContent = text;
         ui.statusBadge.className = `status-badge-large ${className}`;
+        // Aplicar también la clase al contenedor padre para el efecto de fondo completo
+        const statusBox = ui.statusBadge.closest('.status-box.status-main');
+        if (statusBox) {
+            statusBox.className = `status-box status-main ${className}`;
+        }
     }
     function updateDetectionCountUI() { ui.detectionCount.textContent = `${maxDetectionsInCycle} / ${config.target_tornillos}`; }
     function updateStatsUI() { ui.totalInspected.textContent = stats.totalInspected; ui.totalPass.textContent = stats.totalPass; ui.totalFail.textContent = stats.totalFail; }

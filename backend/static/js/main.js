@@ -7,9 +7,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- LÓGICA DE REDIRECCIÓN CORREGIDA ---
     // Si ya existe un token, el usuario ya está autenticado.
-    // Lo redirigimos a la página principal de la aplicación ('/dashboard').
+    // Lo redirigimos según su rol.
     if (localStorage.getItem('accessToken')) {
-        window.location.href = '/dashboard'; // USAR RUTA ABSOLUTA Y LIMPIA
+        try {
+            const user = JSON.parse(localStorage.getItem('user'));
+            if (user && user.role === 'operario') {
+                window.location.href = '/detection';
+            } else {
+                window.location.href = '/dashboard';
+            }
+        } catch {
+            window.location.href = '/dashboard';
+        }
         return; // Detener la ejecución para evitar que se añadan listeners innecesarios
     }
 
@@ -31,8 +40,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 localStorage.setItem('accessToken', response.access_token);
                 localStorage.setItem('user', JSON.stringify(response.user));
 
-                // Redirigir al dashboard INMEDIATAMENTE tras un login exitoso
-                window.location.href = '/dashboard'; // USAR RUTA ABSOLUTA Y LIMPIA
+                // Redirigir según el rol del usuario
+                const userRole = response.user.role;
+                if (userRole === 'operario') {
+                    window.location.href = '/detection';
+                } else {
+                    // Admin y Soporte Técnico van al dashboard
+                    window.location.href = '/dashboard';
+                }
 
             } catch (error) {
                 errorMessage.textContent = 'Error en inicio de sesión. Verifique sus credenciales.';

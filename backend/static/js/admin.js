@@ -9,6 +9,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const API_URL = '/api/admin';
     const authToken = localStorage.getItem('accessToken');
 
+    // Función para aplicar permisos según el rol - DEFINITIVO
+    function applyRolePermissions() {
+        try {
+            const user = JSON.parse(localStorage.getItem('user'));
+            if (!user || !user.role) return;
+
+            console.log(`Aplicando permisos para rol: ${user.role}`);
+
+            // OPERARIO: No tiene acceso a configuración, redirigir inmediatamente
+            if (user.role === 'operario') {
+                console.warn('Operario sin permisos, redirigiendo a detección...');
+                window.location.href = '/detection';
+                return;
+            }
+
+            // SOPORTE TÉCNICO: Ocultar sección de Motores IA
+            if (user.role === 'soporte_tecnico') {
+                const motoresMenuItem = document.querySelector('[data-section="motores"]');
+                const motoresSection = document.getElementById('motores');
+                
+                if (motoresMenuItem) motoresMenuItem.style.display = 'none';
+                if (motoresSection) motoresSection.style.display = 'none';
+
+                console.log('Sección de Motores IA ocultada para Soporte Técnico');
+            }
+
+            // ADMIN: Tiene acceso completo (no se oculta nada)
+        } catch (error) {
+            console.error('Error aplicando permisos de rol:', error);
+        }
+    }
+
     // Función principal para iniciar todo
     async function initializeApp() {
         // Asignamos los listeners PRIMERO. Si falla aquí, sabremos por qué.
@@ -20,6 +52,9 @@ document.addEventListener('DOMContentLoaded', () => {
             showAlert("Error grave en la interfaz. Contacte a soporte.", "danger");
             return; // Detener la ejecución si la UI básica no funciona
         }
+        
+        // Aplicar permisos de rol antes de cargar datos
+        applyRolePermissions();
         
         // LUEGO cargamos todos los datos y renderizamos
         await api.reloadData();

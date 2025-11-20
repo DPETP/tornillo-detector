@@ -17,11 +17,11 @@ class YOLODetector:
         # 2. Obtener el directorio padre de este archivo -> C:\...\backend\vision
         vision_dir = current_file_path.parent
         
-        # 3. Obtener el directorio raíz del proyecto (subiendo dos niveles: de 'vision' a 'backend', y de 'backend' a la raíz)
-        project_root = vision_dir.parent.parent
+        # 3. Obtener el directorio backend (subiendo un nivel: de 'vision' a 'backend')
+        backend_dir = vision_dir.parent
         
-        # 4. Construir la ruta final al modelo de forma segura
-        absolute_model_path = project_root / 'weights' / model_filename
+        # 4. Construir la ruta final al modelo en backend/uploads/
+        absolute_model_path = backend_dir / 'uploads' / model_filename
 
         if not absolute_model_path.is_file():
             raise FileNotFoundError(f"El modelo no se encontró en la ruta: {absolute_model_path}")

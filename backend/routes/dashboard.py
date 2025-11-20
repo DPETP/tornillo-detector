@@ -16,10 +16,16 @@ def get_overview():
     """
     Calcula y devuelve una vista general de las estadísticas del equipo del usuario,
     directamente desde la tabla de detecciones para máxima precisión.
+    Solo accesible para admin y soporte_tecnico.
     """
-    # Obtenemos el equipo del usuario directamente desde el token JWT
+    # Obtenemos el equipo y rol del usuario directamente desde el token JWT
     claims = get_jwt()
     user_team = claims.get('team')
+    user_role = claims.get('role')
+
+    # Validar permisos: solo admin y soporte_tecnico
+    if user_role not in ['admin', 'soporte_tecnico']:
+        return jsonify(success=False, error="No tienes permisos para acceder al dashboard."), 403
 
     if not user_team:
         return jsonify(success=False, error="No se encontró el equipo del usuario en el token."), 400
@@ -39,6 +45,16 @@ def get_overview():
         # 4. Cálculo del Pass Rate (evitando división por cero)
         pass_rate = (passed_inspections / total_inspections * 100) if total_inspections > 0 else 0
         
+        # 5. Cálculo del tiempo promedio de inferencia
+        average_inference_time = db.session.query(
+            func.avg(Detection.duracion_inferencia)
+        ).filter_by(team=user_team).scalar() or 0.0
+        
+        # 6. Cálculo de confianza promedio
+        average_confidence = db.session.query(
+            func.avg(Detection.confidence)
+        ).filter_by(team=user_team).scalar() or 0.0
+        
         # Devolvemos un JSON limpio con los datos que el frontend necesita
         return jsonify({
             'success': True,
@@ -47,7 +63,9 @@ def get_overview():
                 'total_inspections': total_inspections,
                 'passed': passed_inspections,
                 'failed': failed_inspections,
-                'pass_rate': round(pass_rate, 2)
+                'pass_rate': round(pass_rate, 2),
+                'average_inference_time': round(average_inference_time / 1000, 2) if average_inference_time else 0,  # Convertir ms a segundos
+                'average_confidence': round(average_confidence * 100, 2) if average_confidence else 0
             }
         }), 200
     except Exception as e:
@@ -59,10 +77,17 @@ def get_overview():
 def get_team_stats():
     """
     Obtener estadísticas del equipo para gráficos (por ejemplo, últimos 7 días).
-    Mantenemos esta ruta para uso futuro.
+    Solo accesible para admin y soporte_tecnico.
     """
+    claims = get_jwt()
+    user_role = claims.get('role')
+    
+    # Validar permisos
+    if user_role not in ['admin', 'soporte_tecnico']:
+        return jsonify(success=False, message='No tienes permisos para acceder al dashboard.'), 403
+    
     user_id = get_jwt_identity()
-    user = User.query.get(user_id) # Esta ruta aún necesita el objeto User
+    user = User.query.get(user_id)
     
     if not user:
         return jsonify(success=False, message='Usuario no encontrado'), 404
@@ -100,8 +125,15 @@ def get_team_stats():
 def get_user_performance():
     """
     Obtener desempeño del usuario actual.
-    Mantenemos esta ruta para uso futuro.
+    Solo accesible para admin y soporte_tecnico.
     """
+    claims = get_jwt()
+    user_role = claims.get('role')
+    
+    # Validar permisos
+    if user_role not in ['admin', 'soporte_tecnico']:
+        return jsonify(success=False, message='No tienes permisos para acceder al dashboard.'), 403
+    
     user_id = get_jwt_identity()
     user = User.query.get(user_id)
     
