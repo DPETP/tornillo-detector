@@ -112,6 +112,31 @@ class API {
         });
         return this._handleResponse(response);
     }
+
+    // ENGINE MANAGEMENT ENDPOINTS
+    async getAvailableEngines() {
+        const response = await fetch(`${API_URL}/detection/available-engines`, {
+            method: 'GET',
+            headers: this.getHeaders()
+        });
+        return this._handleResponse(response);
+    }
+
+    async getActiveEngine() {
+        const response = await fetch(`${API_URL}/detection/active-engine`, {
+            method: 'GET',
+            headers: this.getHeaders()
+        });
+        return this._handleResponse(response);
+    }
+
+    async changeEngine(engineId) {
+        const response = await fetch(`${API_URL}/detection/change-engine/${engineId}`, {
+            method: 'POST',
+            headers: this.getHeaders()
+        });
+        return this._handleResponse(response);
+    }
 }
 
 // Instancia global de API

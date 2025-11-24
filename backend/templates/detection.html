@@ -32,10 +32,26 @@
                     <canvas id="canvasOverlay"></canvas>
                 </div>
                 <aside class="status-panel">
+                    <!-- === Selector de Motor IA === -->
+                    <div class="status-box">
+                        <label>Motor IA Activo</label>
+                        <select id="engineSelect" class="video-select">
+                            <option value="">Cargando...</option>
+                        </select>
+                    </div>
+
                     <!-- === CAMBIO IMPORTANTE AQUÍ: Selector de Cámara === -->
                     <div class="status-box">
                         <label>Dispositivo de Video</label>
                         <select id="videoSourceSelect" class="video-select"></select>
+                    </div>
+
+                    <!-- === Toggle Bounding Boxes === -->
+                    <div class="status-box">
+                        <label>
+                            <input type="checkbox" id="toggleBoundingBoxes" checked>
+                            Mostrar Bounding Boxes
+                        </label>
                     </div>
 
                     <!-- Contadores de Estadísticas -->

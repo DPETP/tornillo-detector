@@ -10,6 +10,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let config = { target_tornillos: 0, confidence_threshold: 0.5, inspection_cycle_time: 20, model_name: "N/A" };
     let stats = { totalInspected: 0, totalPass: 0, totalFail: 0 };
     let currentConfidence = 0.5;
+    // Por defecto TRUE para que siempre muestre los bounding boxes
+    let showBoundingBoxes = localStorage.getItem('showBoundingBoxes') === 'false' ? false : true;
+    let lastDetections = []; // Guardar últimas detecciones para redibujar en cada frame
 
     const ui = {
         video: document.getElementById('videoElement'),
@@ -27,13 +30,20 @@ document.addEventListener('DOMContentLoaded', () => {
         totalInspected: document.getElementById('total-inspected'),
         totalPass: document.getElementById('total-pass'),
         totalFail: document.getElementById('total-fail'),
-        videoSourceSelect: document.getElementById('videoSourceSelect')
+        videoSourceSelect: document.getElementById('videoSourceSelect'),
+        engineSelect: document.getElementById('engineSelect'),
+        toggleBoundingBoxes: document.getElementById('toggleBoundingBoxes')
     };
 
     // --- INICIALIZACIÓN ---
     async function initializeApp() {
         setupEventListeners();
         await populateCameraList();
+        await loadAvailableEngines();
+        
+        // Restaurar preferencia de bounding boxes
+        ui.toggleBoundingBoxes.checked = showBoundingBoxes;
+        
         try {
             const result = await api.getDetectionConfig();
             config = result.data;
@@ -50,6 +60,33 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function loadAvailableEngines() {
+        try {
+            // Cargar todos los motores disponibles
+            const enginesResult = await api.getAvailableEngines();
+            
+            // Cargar el motor activo
+            const activeResult = await api.getActiveEngine();
+            const activeId = activeResult?.data?.id || null;
+            
+            console.log('Motores disponibles:', enginesResult?.data);
+            console.log('Motor activo ID:', activeId);
+            
+            if (enginesResult && enginesResult.success && enginesResult.data.length > 0) {
+                ui.engineSelect.innerHTML = enginesResult.data.map(engine => {
+                    const selected = engine.id === activeId ? 'selected' : '';
+                    const activeLabel = engine.id === activeId ? ' ✓' : '';
+                    return `<option value="${engine.id}" ${selected}>${engine.tipo} v${engine.version}${activeLabel}</option>`;
+                }).join('');
+            } else {
+                ui.engineSelect.innerHTML = '<option value="">No hay motores disponibles</option>';
+            }
+        } catch (error) {
+            console.error('Error cargando motores:', error);
+            ui.engineSelect.innerHTML = '<option value="">Error al cargar</option>';
+        }
+    }
+
     function setupEventListeners() {
         ui.startBtn.addEventListener('click', startInspectionCycle);
         ui.stopBtn.addEventListener('click', stopDetection);
@@ -57,11 +94,50 @@ document.addEventListener('DOMContentLoaded', () => {
         ui.confidenceSlider.addEventListener('input', e => {
             currentConfidence = e.target.value / 100;
             ui.confidenceLabel.textContent = e.target.value;
+            console.log(`🎚️ Confianza actualizada a: ${(currentConfidence * 100).toFixed(0)}% (${currentConfidence})`);
         });
         ui.videoSourceSelect.addEventListener('change', () => {
             if (isInspecting || (stream && stream.active)) {
                 stopDetection();
                 startInspectionCycle();
+            }
+        });
+        
+        // Toggle de bounding boxes
+        ui.toggleBoundingBoxes.addEventListener('change', e => {
+            showBoundingBoxes = e.target.checked;
+            localStorage.setItem('showBoundingBoxes', showBoundingBoxes);
+        });
+        
+        // Cambiar motor IA
+        ui.engineSelect.addEventListener('change', async (e) => {
+            const engineId = e.target.value;
+            if (!engineId) return;
+            
+            // Guardar el ID seleccionado para evitar loops
+            const selectedEngine = engineId;
+            
+            try {
+                const result = await api.changeEngine(selectedEngine);
+                console.log('Motor cambiado:', result);
+                
+                // Detener la detección actual si está corriendo
+                if (isInspecting) {
+                    stopDetection();
+                }
+                
+                // Dar tiempo al backend para actualizar la BD
+                await new Promise(resolve => setTimeout(resolve, 200));
+                
+                // Recargar información del motor activo
+                await loadAvailableEngines();
+                
+                alert('Motor IA cambiado exitosamente. Presione "Iniciar" para comenzar.');
+            } catch (error) {
+                console.error('Error al cambiar motor:', error);
+                alert('Error al cambiar el motor: ' + error.message);
+                // Recargar para mostrar el estado correcto
+                await loadAvailableEngines();
             }
         });
     }
@@ -179,22 +255,58 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function detectionLoop() {
         if (!isInspecting) return;
+        
         try {
+            // 1. Dibujar el frame del video (esto borra el canvas)
             ui.ctx.drawImage(ui.video, 0, 0, ui.canvas.width, ui.canvas.height);
+            
+            // 2. Redibujar las últimas detecciones conocidas INMEDIATAMENTE
+            if (lastDetections.length > 0) {
+                drawDetections(lastDetections);
+            }
+            
+            // 3. Procesar el frame en segundo plano (async)
+            // USAR EL MISMO TAMAÑO QUE EL CANVAS DISPLAY para evitar distorsión
             const canvasForProcessing = document.createElement('canvas');
-            canvasForProcessing.width = 640; canvasForProcessing.height = 480;
-            canvasForProcessing.getContext('2d').drawImage(ui.video, 0, 0, 640, 480);
+            canvasForProcessing.width = ui.canvas.width;
+            canvasForProcessing.height = ui.canvas.height;
+            canvasForProcessing.getContext('2d').drawImage(ui.video, 0, 0, ui.canvas.width, ui.canvas.height);
             const imageData = canvasForProcessing.toDataURL('image/jpeg', 0.7);
             const result = await api.processFrame(imageData);
+            
+            console.log('Respuesta del backend:', result);
+            
             if (isInspecting && result && result.success) {
+                console.log(`\n--- Frame procesado ---`);
+                console.log(`Total detecciones recibidas: ${result.detections.length}`);
+                console.log(`Umbral de confianza actual: ${(currentConfidence * 100).toFixed(0)}%`);
+                
+                // Log detallado de cada detección
+                result.detections.forEach((det, idx) => {
+                    const passed = det.confidence >= currentConfidence;
+                    const symbol = passed ? '✓ PASS' : '✗ RECHAZADO';
+                    const confPercent = (det.confidence * 100).toFixed(1);
+                    console.log(`  ${symbol} Det ${idx}: ${det.class_name} ${confPercent}% ${passed ? '' : '(< ' + (currentConfidence * 100).toFixed(0) + '%)'}`);
+                });
+                
                 const filteredDetections = result.detections.filter(d => d.confidence >= currentConfidence);
+                console.log(`✅ Detecciones que PASAN el filtro: ${filteredDetections.length} de ${result.detections.length}`);
+                
+                // 4. Actualizar las detecciones guardadas
+                lastDetections = filteredDetections;
+                
                 if (filteredDetections.length > maxDetectionsInCycle) {
+                    console.log(`📊 ACTUALIZANDO máximo: ${maxDetectionsInCycle} -> ${filteredDetections.length}`);
                     maxDetectionsInCycle = filteredDetections.length;
                     updateDetectionCountUI();
+                } else {
+                    console.log(`📊 Máximo sigue siendo: ${maxDetectionsInCycle} (actual: ${filteredDetections.length})`);
                 }
-                drawDetections(filteredDetections);
+            } else {
+                console.warn('No hay detecciones o el resultado no fue exitoso');
             }
         } catch (error) { console.error("Error en ciclo de detección:", error); }
+        
         animationFrameId = requestAnimationFrame(detectionLoop);
     }
     
@@ -212,17 +324,41 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateStatsUI() { ui.totalInspected.textContent = stats.totalInspected; ui.totalPass.textContent = stats.totalPass; ui.totalFail.textContent = stats.totalFail; }
     
     function drawDetections(detections) {
-        detections.forEach(det => {
+        // Solo dibujar si el toggle está activado
+        if (!showBoundingBoxes) {
+            console.log('Bounding boxes desactivados. Marque el checkbox para verlos.');
+            return;
+        }
+        
+        if (detections.length === 0) {
+            console.log('No hay detecciones para dibujar.');
+            return;
+        }
+        
+        console.log(`Dibujando ${detections.length} bounding boxes`, {
+            canvasWidth: ui.canvas.width,
+            canvasHeight: ui.canvas.height,
+            primeraDeteccion: detections[0]
+        });
+        
+        detections.forEach((det, idx) => {
             const [x1, y1, x2, y2] = det.box;
-            const scaleX = ui.canvas.width / 640;
-            const scaleY = ui.canvas.height / 480;
-            ui.ctx.strokeStyle = '#00FF00';
-            ui.ctx.lineWidth = 3;
-            ui.ctx.strokeRect(x1 * scaleX, y1 * scaleY, (x2 - x1) * scaleX, (y2 - y1) * scaleY);
-            ui.ctx.fillStyle = '#00FF00';
-            ui.ctx.font = 'bold 18px Arial';
-            const label = `${(det.confidence * 100).toFixed(0)}%`;
-            ui.ctx.fillText(label, (x1 * scaleX), (y1 * scaleY) > 20 ? (y1 * scaleY) - 5 : (y2 * scaleY) + 20);
+            
+            // Ya NO necesitamos escalar porque el backend procesa la misma resolución que mostramos
+            const scaledX1 = x1;
+            const scaledY1 = y1;
+            const scaledWidth = (x2 - x1);
+            const scaledHeight = (y2 - y1);
+            
+            console.log(`Box ${idx}: [${x1},${y1},${x2},${y2}]`);
+            
+            ui.ctx.strokeStyle = '#FF0000'; // ROJO para que sea MUY visible
+            ui.ctx.lineWidth = 5;
+            ui.ctx.strokeRect(scaledX1, scaledY1, scaledWidth, scaledHeight);
+            ui.ctx.fillStyle = '#FF0000';
+            ui.ctx.font = 'bold 24px Arial';
+            const label = `${det.class_name} ${(det.confidence * 100).toFixed(0)}%`;
+            ui.ctx.fillText(label, scaledX1, scaledY1 > 20 ? scaledY1 - 5 : scaledY1 + scaledHeight + 20);
         });
     }
 

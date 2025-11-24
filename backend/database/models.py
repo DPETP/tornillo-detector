@@ -99,6 +99,7 @@ class InferenceEngine(db.Model):
             'id': self.id,
             'tipo': self.tipo,
             'version': self.version,
+            'ruta_archivo': self.ruta_archivo,
             'activo': self.activo,
             'tamaño_archivo': self.tamaño_archivo,
             'descripcion': self.descripcion,

@@ -10,6 +10,7 @@ class YOLODetector:
     def __init__(self, model_filename='best.pt'):
         """
         Inicializa el detector YOLO. Carga el modelo una sola vez.
+        Soporta YOLOv5, YOLOv8, YOLOv11 y RT-DETR.
         """
         # 1. Obtener la ruta del archivo actual (__file__) -> C:\...\backend\vision\detector.py
         current_file_path = Path(__file__)
@@ -28,7 +29,8 @@ class YOLODetector:
             
         print(f"Cargando modelo desde: {absolute_model_path}")
         self.model = YOLO(absolute_model_path)
-        print("Modelo YOLO cargado exitosamente.")
+        self.model_filename = model_filename
+        print(f"Modelo YOLO cargado exitosamente: {model_filename}")
 
     def detect(self, frame):
         """

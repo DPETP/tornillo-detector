@@ -188,23 +188,42 @@ def create_inference_engine(current_admin_id):
         return jsonify(success=False, error='No se proporcionó archivo'), 400
     
     file = request.files['archivo']
-    if not file or not file.filename.endswith('.pt'):
-        return jsonify(success=False, error='Solo archivos .pt son permitidos'), 400
+    allowed_extensions = ['.pt', '.pth', '.weights']
+    if not file or not any(file.filename.endswith(ext) for ext in allowed_extensions):
+        return jsonify(success=False, error='Solo archivos .pt, .pth o .weights son permitidos'), 400
     
-    filename = secure_filename(file.filename)
-    upload_path = os.path.join(DevelopmentConfig.UPLOAD_FOLDER, filename)
+    data = request.form
+    tipo = data.get('tipo')
+    version = data.get('version')
+    
+    # Validar extensión según tipo de modelo
+    extension_map = {
+        'yolov5': '.pt', 'yolov8': '.pt', 'yolov11': '.pt',
+        'rtdetr': '.pt', 'efficientdet': '.pth', 'maskrcnn': '.weights'
+    }
+    expected_ext = extension_map.get(tipo, '.pt')
+    if not file.filename.endswith(expected_ext):
+        return jsonify(success=False, error=f'Para {tipo} se requiere archivo {expected_ext}'), 400
+    
+    # Generar nombre único: {tipo}_{version}_{timestamp}.ext
+    timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+    file_extension = os.path.splitext(file.filename)[1]
+    new_filename = f"{tipo}_v{version}_{timestamp}{file_extension}"
+    
+    upload_path = os.path.join(DevelopmentConfig.UPLOAD_FOLDER, new_filename)
     os.makedirs(DevelopmentConfig.UPLOAD_FOLDER, exist_ok=True)
     file.save(upload_path)
     
-    data = request.form
     new_engine = InferenceEngine(
-        tipo=data.get('tipo'), version=data.get('version'),
-        ruta_archivo=upload_path, tamaño_archivo=os.path.getsize(upload_path),
-        creado_por_id=current_admin_id, descripcion=data.get('descripcion', '')
+        tipo=tipo, version=version,
+        ruta_archivo=new_filename,  # Solo guardar el nombre, no la ruta completa
+        tamaño_archivo=os.path.getsize(upload_path),
+        creado_por_id=current_admin_id, 
+        descripcion=data.get('descripcion', '')
     )
     db.session.add(new_engine)
     db.session.commit()
-    return jsonify(success=True, message='Motor de IA cargado', data=new_engine.to_dict()), 201
+    return jsonify(success=True, message=f'Motor {tipo} v{version} cargado exitosamente', data=new_engine.to_dict()), 201
 
 @admin_bp.route('/inference-engines/<int:engine_id>/activate', methods=['POST'])
 @admin_required
