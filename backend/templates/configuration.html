@@ -10,16 +10,66 @@
 <body>
     <div class="container">
         <aside class="sidebar">
-            <div class="logo"><span>🔧</span><div><div class="logo-text">Configuración</div><div class="logo-subtext">Admin</div></div></div>
-            <button id="nav-dashboard" class="menu-item-special"><span>📊</span> Volver al Dashboard</button>
+            <div class="logo">
+                <span>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M12 1v6m0 6v6m5.656-13.656l-4.242 4.242m-2.828 2.828l-4.242 4.242m16.97-5.656l-6 0m-6 0l-6 0m13.656 5.656l-4.242-4.242m-2.828-2.828l-4.242-4.242"/>
+                    </svg>
+                </span>
+                <div><div class="logo-text">Configuración</div><div class="logo-subtext">Admin</div></div>
+            </div>
+            <button id="nav-dashboard" class="menu-item-special">
+                <span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <line x1="19" y1="12" x2="5" y2="12"/>
+                        <polyline points="12 19 5 12 12 5"/>
+                    </svg>
+                </span> Volver al Dashboard
+            </button>
             <nav class="menu">
-                <button class="menu-item active" data-section="usuarios"><span>👥</span> Usuarios</button>
-                <button class="menu-item" data-section="modelos"><span>📋</span> Modelos AA</button>
-                <button class="menu-item" data-section="motores"><span>⚙️</span> Motores IA</button>
-                <button class="menu-item" data-section="configuracion"><span>⚡</span> Configuración Global</button>
+                <button class="menu-item active" data-section="usuarios">
+                    <span>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                            <circle cx="12" cy="7" r="4"/>
+                        </svg>
+                    </span> Usuarios
+                </button>
+                <button class="menu-item" data-section="modelos">
+                    <span>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+                            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+                        </svg>
+                    </span> Modelos AA
+                </button>
+                <button class="menu-item" data-section="motores">
+                    <span>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M12 1v6m0 6v6m5.656-13.656l-4.242 4.242m-2.828 2.828l-4.242 4.242m16.97-5.656l-6 0m-6 0l-6 0m13.656 5.656l-4.242-4.242m-2.828-2.828l-4.242-4.242"/>
+                        </svg>
+                    </span> Motores IA
+                </button>
+                <button class="menu-item" data-section="configuracion">
+                    <span>
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                        </svg>
+                    </span> Configuración Global
+                </button>
             </nav>
             <div class="bgh-logo"><img src="/assets/bgh-logo.png" alt="BGH Logo"></div>
-            <button class="logout-btn"><span>🚪</span> Cerrar Sesión</button>
+            <button class="logout-btn">
+                <span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                        <polyline points="16 17 21 12 16 7"/>
+                        <line x1="21" y1="12" x2="9" y2="12"/>
+                    </svg>
+                </span> Cerrar Sesión
+            </button>
         </aside>
 
         <main class="main-content">

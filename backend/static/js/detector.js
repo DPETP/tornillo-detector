@@ -13,6 +13,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Por defecto TRUE para que siempre muestre los bounding boxes
     let showBoundingBoxes = localStorage.getItem('showBoundingBoxes') === 'false' ? false : true;
     let lastDetections = []; // Guardar últimas detecciones para redibujar en cada frame
+    let trackedScrews = []; // Tracking de tornillos únicos detectados en el ciclo
+    const DISTANCE_THRESHOLD = 80; // Pixeles de tolerancia para considerar que es el mismo tornillo
+    const MIN_DETECTIONS_TO_CONFIRM = 3; // Número mínimo de veces que debe verse para confirmarse
 
     const ui = {
         video: document.getElementById('videoElement'),
@@ -145,12 +148,25 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- LÓGICA DE CÁMARA E INSPECCIÓN ---
     async function populateCameraList() {
         try {
+            // Primero solicitar permiso de cámara para obtener las etiquetas
+            try {
+                const testStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                testStream.getTracks().forEach(track => track.stop());
+            } catch (permError) {
+                console.warn("Permiso de cámara no concedido aún:", permError);
+            }
+
             const devices = await navigator.mediaDevices.enumerateDevices();
+            console.log('Dispositivos encontrados:', devices);
+            
             const videoDevices = devices.filter(device => device.kind === 'videoinput');
+            console.log('Dispositivos de video:', videoDevices);
+            
             ui.videoSourceSelect.innerHTML = '';
             if (videoDevices.length === 0) {
                 ui.videoSourceSelect.innerHTML = '<option>No se encontraron cámaras</option>';
                 ui.startBtn.disabled = true;
+                alert('No se detectaron cámaras web. Verifica que tu dispositivo de video esté conectado y que el navegador tenga permisos.');
                 return;
             }
             videoDevices.forEach((device, index) => {
@@ -159,33 +175,90 @@ document.addEventListener('DOMContentLoaded', () => {
                 option.text = device.label || `Cámara ${index + 1}`;
                 ui.videoSourceSelect.appendChild(option);
             });
-        } catch (error) { console.error("Error al enumerar dispositivos:", error); }
+            console.log(`✓ ${videoDevices.length} cámara(s) disponible(s)`);
+        } catch (error) { 
+            console.error("Error al enumerar dispositivos:", error);
+            alert('Error al acceder a los dispositivos de video: ' + error.message);
+        }
     }
 
     async function startCamera() {
         const deviceId = ui.videoSourceSelect.value;
-        if (!deviceId) throw new Error("No hay una cámara seleccionada.");
-        const constraints = { video: { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } } };
+        console.log('Intentando iniciar cámara con deviceId:', deviceId);
+        
+        if (!deviceId || deviceId === '') {
+            throw new Error("No hay una cámara seleccionada. Por favor selecciona un dispositivo de video.");
+        }
+        
+        // Primero intentar con deviceId exacto, si falla intentar sin restricción específica
+        let constraints = { 
+            video: { 
+                deviceId: { exact: deviceId }, 
+                width: { ideal: 1280 }, 
+                height: { ideal: 720 } 
+            } 
+        };
         
         try {
+            console.log('Solicitando acceso a la cámara con constraints:', constraints);
             stream = await navigator.mediaDevices.getUserMedia(constraints);
             ui.video.srcObject = stream;
             
             return new Promise((resolve, reject) => {
                 ui.video.onloadedmetadata = () => {
+                    console.log('Metadata del video cargada');
                     ui.video.play()
                         .then(() => {
                             ui.canvas.width = ui.video.videoWidth;
                             ui.canvas.height = ui.video.videoHeight;
-                            console.log(`Cámara activada: ${ui.video.videoWidth}x${ui.video.videoHeight}`);
+                            console.log(`✓ Cámara activada: ${ui.video.videoWidth}x${ui.video.videoHeight}`);
                             resolve();
                         })
-                        .catch(reject);
+                        .catch(err => {
+                            console.error('Error al reproducir video:', err);
+                            reject(err);
+                        });
                 };
-                ui.video.onerror = () => reject(new Error('Error al cargar el video'));
+                ui.video.onerror = (err) => {
+                    console.error('Error en elemento video:', err);
+                    reject(new Error('Error al cargar el video'));
+                };
+                
+                // Timeout de seguridad
+                setTimeout(() => reject(new Error('Timeout: El video no se cargó en 10 segundos')), 10000);
             });
         } catch (error) {
-            console.error('Error al acceder a la cámara:', error);
+            console.error('Error detallado al acceder a la cámara:', error);
+            console.error('Error name:', error.name);
+            console.error('Error message:', error.message);
+            
+            // Intentar sin restricción de deviceId específico
+            if (error.name === 'OverconstrainedError' || error.name === 'NotFoundError') {
+                console.log('Reintentando sin restricción de deviceId específico...');
+                try {
+                    constraints = { video: { width: { ideal: 1280 }, height: { ideal: 720 } } };
+                    stream = await navigator.mediaDevices.getUserMedia(constraints);
+                    ui.video.srcObject = stream;
+                    
+                    return new Promise((resolve, reject) => {
+                        ui.video.onloadedmetadata = () => {
+                            ui.video.play()
+                                .then(() => {
+                                    ui.canvas.width = ui.video.videoWidth;
+                                    ui.canvas.height = ui.video.videoHeight;
+                                    console.log(`✓ Cámara activada (modo genérico): ${ui.video.videoWidth}x${ui.video.videoHeight}`);
+                                    resolve();
+                                })
+                                .catch(reject);
+                        };
+                        ui.video.onerror = () => reject(new Error('Error al cargar el video'));
+                    });
+                } catch (retryError) {
+                    console.error('Error en reintento:', retryError);
+                    throw new Error(`No se pudo acceder a la cámara: ${retryError.message}`);
+                }
+            }
+            
             throw new Error(`No se pudo acceder a la cámara: ${error.message}`);
         }
     }
@@ -211,6 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             isInspecting = true;
             maxDetectionsInCycle = 0;
+            trackedScrews = []; // Resetear tracking de tornillos únicos
             updateDetectionCountUI();
             let timeLeft = ui.cycleTimeSlider.value;
             setStatus(`EN CURSO... ${timeLeft}s`, 'processing');
@@ -292,15 +366,47 @@ document.addEventListener('DOMContentLoaded', () => {
                 const filteredDetections = result.detections.filter(d => d.confidence >= currentConfidence);
                 console.log(`✅ Detecciones que PASAN el filtro: ${filteredDetections.length} de ${result.detections.length}`);
                 
-                // 4. Actualizar las detecciones guardadas
+                // Todas las detecciones filtradas son trackables (usar el mismo umbral del slider)
+                const trackableDetections = filteredDetections;
+                
+                // 5. Actualizar las detecciones guardadas para dibujar
                 lastDetections = filteredDetections;
                 
-                if (filteredDetections.length > maxDetectionsInCycle) {
-                    console.log(`📊 ACTUALIZANDO máximo: ${maxDetectionsInCycle} -> ${filteredDetections.length}`);
-                    maxDetectionsInCycle = filteredDetections.length;
+                // 6. TRACKING: Registrar tornillos únicos (solo los trackables)
+                let newScrewsFound = 0;
+                trackableDetections.forEach(det => {
+                    const isNew = trackUniqueScrew(det);
+                    if (isNew) {
+                        newScrewsFound++;
+                    }
+                });
+                
+                // 7. Actualizar el contador con tornillos ÚNICOS CONFIRMADOS
+                const confirmedCount = getConfirmedScrewsCount();
+                const totalTracked = trackedScrews.length;
+                
+                // Limitar al máximo esperado para evitar falsos positivos
+                const finalCount = Math.min(confirmedCount, config.target_tornillos);
+                
+                console.log(`🔍 Tracking: ${totalTracked} detectados, ${confirmedCount} confirmados (≥${MIN_DETECTIONS_TO_CONFIRM} veces)`);
+                
+                if (confirmedCount > config.target_tornillos) {
+                    console.warn(`⚠️ ADVERTENCIA: Se confirmaron ${confirmedCount} tornillos pero solo se esperan ${config.target_tornillos}. Limitando a ${finalCount}.`);
+                }
+                
+                // Mostrar detalles de cada tornillo trackeado
+                trackedScrews.forEach((screw, idx) => {
+                    const status = screw.detectionCount >= MIN_DETECTIONS_TO_CONFIRM ? '✅ CONFIRMADO' : '⏳ PENDIENTE';
+                    const pos = `[${Math.round(screw.center.x)}, ${Math.round(screw.center.y)}]`;
+                    console.log(`  ${status} #${idx + 1}: visto ${screw.detectionCount}x, conf ${(screw.confidence * 100).toFixed(0)}%, pos ${pos}`);
+                });
+                
+                if (finalCount > maxDetectionsInCycle) {
+                    console.log(`📊 ACTUALIZANDO máximo: ${maxDetectionsInCycle} -> ${finalCount}`);
+                    maxDetectionsInCycle = finalCount;
                     updateDetectionCountUI();
                 } else {
-                    console.log(`📊 Máximo sigue siendo: ${maxDetectionsInCycle} (actual: ${filteredDetections.length})`);
+                    console.log(`📊 Tornillos confirmados: ${finalCount} (${filteredDetections.length} en este frame)`);
                 }
             } else {
                 console.warn('No hay detecciones o el resultado no fue exitoso');
@@ -308,6 +414,58 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) { console.error("Error en ciclo de detección:", error); }
         
         animationFrameId = requestAnimationFrame(detectionLoop);
+    }
+    
+    // --- FUNCIONES DE TRACKING ---
+    function getCenter(box) {
+        const [x1, y1, x2, y2] = box;
+        return {
+            x: (x1 + x2) / 2,
+            y: (y1 + y2) / 2
+        };
+    }
+    
+    function calculateDistance(center1, center2) {
+        const dx = center1.x - center2.x;
+        const dy = center1.y - center2.y;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+    
+    function trackUniqueScrew(detection) {
+        const newCenter = getCenter(detection.box);
+        
+        // Verificar si este tornillo ya está trackeado
+        const existingScrew = trackedScrews.find(tracked => {
+            const distance = calculateDistance(newCenter, tracked.center);
+            return distance < DISTANCE_THRESHOLD;
+        });
+        
+        if (existingScrew) {
+            // Actualizar la posición y confianza del tornillo existente
+            existingScrew.center = newCenter;
+            existingScrew.box = detection.box;
+            existingScrew.confidence = Math.max(existingScrew.confidence, detection.confidence);
+            existingScrew.lastSeen = Date.now();
+            existingScrew.detectionCount++; // Incrementar contador de veces visto
+            return false; // No es nuevo
+        } else {
+            // Agregar nuevo tornillo único
+            trackedScrews.push({
+                center: newCenter,
+                box: detection.box,
+                confidence: detection.confidence,
+                class_name: detection.class_name,
+                firstSeen: Date.now(),
+                lastSeen: Date.now(),
+                detectionCount: 1 // Primera vez que se ve
+            });
+            return true; // Es nuevo
+        }
+    }
+    
+    function getConfirmedScrewsCount() {
+        // Solo contar tornillos que se hayan visto al menos MIN_DETECTIONS_TO_CONFIRM veces
+        return trackedScrews.filter(screw => screw.detectionCount >= MIN_DETECTIONS_TO_CONFIRM).length;
     }
     
     // --- FUNCIONES DE UTILIDAD ---

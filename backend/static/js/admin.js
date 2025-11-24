@@ -115,6 +115,12 @@ document.addEventListener('DOMContentLoaded', () => {
             'edit-model': () => openModal('modelModal', state.allModels.find(m => m.id === id)),
             'delete-model': () => { if (confirm('¿Eliminar (desactivar) modelo?')) api.deleteModel(id); },
             'activate-engine': () => api.activateEngine(id),
+            'delete-engine': () => {
+                const engine = state.allEngines.find(e => e.id === id);
+                if (confirm(`¿Eliminar motor ${engine.tipo} v${engine.version}?\n\nEsto eliminará el registro y el archivo de entrenamiento (.pt/.pth/.weights) permanentemente.`)) {
+                    api.deleteEngine(id);
+                }
+            },
         };
         if (actions[action]) actions[action]();
     }
@@ -139,7 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function showAlert(message, type = 'success') { const container = document.getElementById('alerts-container'); const alertDiv = document.createElement('div'); alertDiv.className = `alert alert-${type}`; alertDiv.textContent = message; container.appendChild(alertDiv); setTimeout(() => alertDiv.remove(), 4000); }
     function renderAll() {
         const usuariosTbody = document.getElementById('usuarios-tbody'); if (usuariosTbody) usuariosTbody.innerHTML = state.allUsers.map(user => { const isActive = user.is_active; const toggleButtonClass = isActive ? 'warning' : 'success'; const toggleButtonText = isActive ? 'Desactivar' : 'Activar'; return `<tr><td>${user.username}</td><td>${user.email}</td><td>${user.role}</td><td>${user.team}</td><td><span class="badge ${isActive ? 'success' : 'danger'}">${isActive ? 'Activo' : 'Inactivo'}</span></td><td><button class="btn btn-sm" data-action="edit-user" data-id="${user.id}">Editar</button><button class="btn btn-sm ${toggleButtonClass}" data-action="toggle-user-status" data-id="${user.id}">${toggleButtonText}</button><button class="btn btn-sm danger" data-action="delete-user" data-id="${user.id}">Eliminar</button></td></tr>`; }).join('');
-        const motoresTbody = document.getElementById('motores-tbody'); if (motoresTbody) motoresTbody.innerHTML = state.allEngines.map(engine => `<tr><td>${engine.tipo}</td><td>${engine.version}</td><td>${(engine.tamaño_archivo / 1024 / 1024).toFixed(2)}</td><td><span class="badge ${engine.activo ? 'success' : 'warning'}">${engine.activo ? 'Activo' : 'Inactivo'}</span></td><td>${!engine.activo ? `<button class="btn btn-sm success" data-action="activate-engine" data-id="${engine.id}">Activar</button>` : '<span>✓ Activo</span>'}</td></tr>`).join('');
+        const motoresTbody = document.getElementById('motores-tbody'); if (motoresTbody) motoresTbody.innerHTML = state.allEngines.map(engine => `<tr><td>${engine.tipo}</td><td>${engine.version}</td><td>${(engine.tamaño_archivo / 1024 / 1024).toFixed(2)}</td><td><span class="badge ${engine.activo ? 'success' : 'warning'}">${engine.activo ? 'Activo' : 'Inactivo'}</span></td><td>${!engine.activo ? `<button class="btn btn-sm success" data-action="activate-engine" data-id="${engine.id}">Activar</button> <button class="btn btn-sm danger" data-action="delete-engine" data-id="${engine.id}">Eliminar</button>` : '<span>✓ Activo</span>'}</td></tr>`).join('');
         const modelosTbody = document.getElementById('modelos-tbody'); if (modelosTbody) { const activeModelId = state.settings.ac_model_activo_id; modelosTbody.innerHTML = state.allModels.map(model => { const isCurrentlyActive = model.id === activeModelId; const activeIndicator = isCurrentlyActive ? '<span class="active-indicator">★ En Uso</span>' : ''; return `<tr><td>${model.nombre} ${activeIndicator}</td><td>${model.target_tornillos}</td><td>${model.confidence_threshold}</td><td>${model.inspection_cycle_time}s</td><td>${state.allEngines.find(e => e.id === model.motor_inferencia_id)?.tipo || 'N/A'}</td><td><span class="badge ${model.activo ? 'success' : 'danger'}">${model.activo ? 'Activo' : 'Inactivo'}</span></td><td><button class="btn btn-sm" data-action="edit-model" data-id="${model.id}">Editar</button><button class="btn btn-sm danger" data-action="delete-model" data-id="${model.id}">Eliminar</button></td></tr>`; }).join('');}
         const motorSelect = document.getElementById('motor-select'); if (motorSelect) motorSelect.innerHTML = `<option value="">-- Seleccionar --</option>` + state.allEngines.map(e => `<option value="${e.id}">${e.tipo} v${e.version}</option>`).join('');
         const modeloActivoSelect = document.getElementById('modelo-activo'); if (modeloActivoSelect) { modeloActivoSelect.innerHTML = `<option value="">-- Seleccionar --</option>` + state.allModels.filter(m => m.activo).map(m => `<option value="${m.id}">${m.nombre}</option>`).join(''); if (state.settings.ac_model_activo_id) modeloActivoSelect.value = state.settings.ac_model_activo_id; }
@@ -155,6 +161,7 @@ document.addEventListener('DOMContentLoaded', () => {
         deleteUser: async (id) => { const result = await api.makeRequest(`/users/${id}`, 'DELETE'); if (result) { showAlert(result.message); await api.reloadData(); } },
         deleteModel: async (id) => { const result = await api.makeRequest(`/ac-models/${id}`, 'DELETE'); if (result) { showAlert('Modelo eliminado (desactivado).'); await api.reloadData(); } },
         activateEngine: async (id) => { const result = await api.makeRequest(`/inference-engines/${id}/activate`, 'POST'); if (result) { showAlert(result.message); await api.reloadData(); } },
+        deleteEngine: async (id) => { const result = await api.makeRequest(`/inference-engines/${id}`, 'DELETE'); if (result) { showAlert(result.message); await api.reloadData(); } },
     };
     
     initializeApp();

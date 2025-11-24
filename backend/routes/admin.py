@@ -11,7 +11,7 @@ import os
 from datetime import datetime
 from functools import wraps
 
-from ..database.models import db, User, ACModel, InferenceEngine, AuditLog, Settings
+from ..database.models import db, User, ACModel, InferenceEngine, Detection, AuditLog, Settings
 from ..config import DevelopmentConfig
 
 admin_bp = Blueprint('admin', __name__)
@@ -234,6 +234,52 @@ def activate_inference_engine(current_admin_id, engine_id):
     engine.activo = True
     db.session.commit()
     return jsonify(success=True, message=f'Motor {engine.tipo} v{engine.version} activado')
+
+@admin_bp.route('/inference-engines/<int:engine_id>', methods=['DELETE'])
+@admin_required
+def delete_inference_engine(current_admin_id, engine_id):
+    """Eliminar motor de IA y su archivo asociado"""
+    engine = InferenceEngine.query.get_or_404(engine_id)
+    
+    # No permitir eliminar el motor activo
+    if engine.activo:
+        return jsonify(success=False, error='No se puede eliminar el motor activo. Active otro motor primero.'), 400
+    
+    # Verificar si hay modelos de AA usando este motor
+    ac_models_using_engine = ACModel.query.filter_by(motor_inferencia_id=engine_id).count()
+    if ac_models_using_engine > 0:
+        return jsonify(
+            success=False, 
+            error=f'No se puede eliminar este motor. Hay {ac_models_using_engine} modelo(s) de AA que lo están usando. Reasigne los modelos a otro motor primero.'
+        ), 400
+    
+    # Verificar si hay detecciones históricas usando este motor
+    detections_using_engine = Detection.query.filter_by(motor_inferencia_id=engine_id).count()
+    if detections_using_engine > 0:
+        return jsonify(
+            success=False,
+            error=f'No se puede eliminar este motor. Hay {detections_using_engine} detección(es) en el historial que lo referencian. Eliminar podría corromper el historial.'
+        ), 400
+    
+    # Eliminar archivo físico
+    if engine.ruta_archivo:
+        file_path = os.path.join(DevelopmentConfig.UPLOAD_FOLDER, engine.ruta_archivo)
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                print(f"✓ Archivo eliminado: {file_path}")
+        except Exception as e:
+            print(f"⚠ Error al eliminar archivo: {e}")
+            # Continuar con la eliminación del registro aunque falle la eliminación del archivo
+    
+    # Guardar información para el mensaje
+    motor_info = f"{engine.tipo} v{engine.version}"
+    
+    # Eliminar registro de la base de datos
+    db.session.delete(engine)
+    db.session.commit()
+    
+    return jsonify(success=True, message=f'Motor {motor_info} eliminado exitosamente'), 200
 
 # ============================================================
 # RUTAS: CONFIGURACIÓN GLOBAL (REESTRUCTURADO)
