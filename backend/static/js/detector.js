@@ -13,9 +13,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Por defecto TRUE para que siempre muestre los bounding boxes
     let showBoundingBoxes = localStorage.getItem('showBoundingBoxes') === 'false' ? false : true;
     let lastDetections = []; // Guardar últimas detecciones para redibujar en cada frame
+    let lastProcessedFrame = null; // Guardar el último frame procesado para sincronización
     let trackedScrews = []; // Tracking de tornillos únicos detectados en el ciclo
-    const DISTANCE_THRESHOLD = 80; // Pixeles de tolerancia para considerar que es el mismo tornillo
-    const MIN_DETECTIONS_TO_CONFIRM = 3; // Número mínimo de veces que debe verse para confirmarse
+    // DISTANCE_THRESHOLD dinámico: 15% del ancho del canvas (se ajusta automáticamente)
+    let DISTANCE_THRESHOLD = 150; // Se calculará dinámicamente basado en resolución
+    const MIN_DETECTIONS_TO_CONFIRM = 2; // Número mínimo de veces que debe verse para confirmarse (reducido para ser más sensible)
 
     const ui = {
         video: document.getElementById('videoElement'),
@@ -331,26 +333,33 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isInspecting) return;
         
         try {
-            // 1. Dibujar el frame del video (esto borra el canvas)
-            ui.ctx.drawImage(ui.video, 0, 0, ui.canvas.width, ui.canvas.height);
+            // 1. CAPTURAR el frame actual del video ANTES de procesarlo
+            const canvasForProcessing = document.createElement('canvas');
+            canvasForProcessing.width = ui.canvas.width;
+            canvasForProcessing.height = ui.canvas.height;
+            const ctxProcessing = canvasForProcessing.getContext('2d');
+            ctxProcessing.drawImage(ui.video, 0, 0, ui.canvas.width, ui.canvas.height);
             
-            // 2. Redibujar las últimas detecciones conocidas INMEDIATAMENTE
+            // 2. GUARDAR este frame como el último procesado
+            lastProcessedFrame = canvasForProcessing;
+            
+            // 3. Dibujar el frame capturado en el canvas principal
+            ui.ctx.drawImage(lastProcessedFrame, 0, 0);
+            
+            // 4. Redibujar las detecciones ANTERIORES sobre este frame (si existen)
             if (lastDetections.length > 0) {
                 drawDetections(lastDetections);
             }
             
-            // 3. Procesar el frame en segundo plano (async)
-            // USAR EL MISMO TAMAÑO QUE EL CANVAS DISPLAY para evitar distorsión
-            const canvasForProcessing = document.createElement('canvas');
-            canvasForProcessing.width = ui.canvas.width;
-            canvasForProcessing.height = ui.canvas.height;
-            canvasForProcessing.getContext('2d').drawImage(ui.video, 0, 0, ui.canvas.width, ui.canvas.height);
-            const imageData = canvasForProcessing.toDataURL('image/jpeg', 0.7);
+            // 5. Enviar el frame al backend para procesamiento (async)
+            const imageData = lastProcessedFrame.toDataURL('image/jpeg', 0.95);
             const result = await api.processFrame(imageData);
             
             console.log('Respuesta del backend:', result);
             
             if (isInspecting && result && result.success) {
+                // 6. Cuando llegan las detecciones, redibujar sobre el MISMO frame guardado
+                ui.ctx.drawImage(lastProcessedFrame, 0, 0);
                 console.log(`\n--- Frame procesado ---`);
                 console.log(`Total detecciones recibidas: ${result.detections.length}`);
                 console.log(`Umbral de confianza actual: ${(currentConfidence * 100).toFixed(0)}%`);
@@ -373,20 +382,47 @@ document.addEventListener('DOMContentLoaded', () => {
                 lastDetections = filteredDetections;
                 
                 // 6. TRACKING: Registrar tornillos únicos (solo los trackables)
+                // RESTRICCIÓN: Solo agregar nuevos si no hemos alcanzado el target
                 let newScrewsFound = 0;
+                const currentConfirmedCount = getConfirmedScrewsCount();
+                
                 trackableDetections.forEach(det => {
-                    const isNew = trackUniqueScrew(det);
-                    if (isNew) {
-                        newScrewsFound++;
+                    // Solo intentar trackear si aún no alcanzamos el target
+                    if (currentConfirmedCount < config.target_tornillos) {
+                        const isNew = trackUniqueScrew(det);
+                        if (isNew) {
+                            newScrewsFound++;
+                            console.log(`🆕 Nuevo tornillo agregado (${currentConfirmedCount + newScrewsFound}/${config.target_tornillos})`);
+                        }
+                    } else {
+                        // Ya alcanzamos el target, solo actualizar tornillos existentes
+                        const newCenter = getCenter(det.box);
+                        const existingScrew = trackedScrews.find(tracked => {
+                            const distance = calculateDistance(newCenter, tracked.center);
+                            const iou = calculateIoU(det.box, tracked.box);
+                            return distance < DISTANCE_THRESHOLD || iou > 0.3;
+                        });
+                        
+                        if (existingScrew) {
+                            // Actualizar tornillo existente
+                            existingScrew.center = newCenter;
+                            existingScrew.box = det.box;
+                            existingScrew.confidence = Math.max(existingScrew.confidence, det.confidence);
+                            existingScrew.lastSeen = Date.now();
+                            existingScrew.detectionCount++;
+                        }
+                        // Si no existe, lo ignoramos (ya tenemos suficientes)
                     }
                 });
+                
+                console.log(`🎯 Target: ${config.target_tornillos} | Ya confirmados: ${currentConfirmedCount} | Nuevos en este frame: ${newScrewsFound}`);
                 
                 // 7. Actualizar el contador con tornillos ÚNICOS CONFIRMADOS
                 const confirmedCount = getConfirmedScrewsCount();
                 const totalTracked = trackedScrews.length;
                 
-                // Limitar al máximo esperado para evitar falsos positivos
-                const finalCount = Math.min(confirmedCount, config.target_tornillos);
+                // NO limitar - dejar que muestre todos los tornillos detectados
+                const finalCount = confirmedCount;
                 
                 console.log(`🔍 Tracking: ${totalTracked} detectados, ${confirmedCount} confirmados (≥${MIN_DETECTIONS_TO_CONFIRM} veces)`);
                 
@@ -408,12 +444,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else {
                     console.log(`📊 Tornillos confirmados: ${finalCount} (${filteredDetections.length} en este frame)`);
                 }
+                
+                // IMPORTANTE: Solicitar el siguiente frame SOLO después de procesar completamente este
+                animationFrameId = requestAnimationFrame(detectionLoop);
             } else {
                 console.warn('No hay detecciones o el resultado no fue exitoso');
+                animationFrameId = requestAnimationFrame(detectionLoop);
             }
-        } catch (error) { console.error("Error en ciclo de detección:", error); }
-        
-        animationFrameId = requestAnimationFrame(detectionLoop);
+        } catch (error) { 
+            console.error("Error en ciclo de detección:", error);
+            animationFrameId = requestAnimationFrame(detectionLoop);
+        }
     }
     
     // --- FUNCIONES DE TRACKING ---
@@ -431,13 +472,48 @@ document.addEventListener('DOMContentLoaded', () => {
         return Math.sqrt(dx * dx + dy * dy);
     }
     
+    function calculateIoU(box1, box2) {
+        // Calcular Intersection over Union para determinar si son el mismo objeto
+        const [x1_1, y1_1, x2_1, y2_1] = box1;
+        const [x1_2, y1_2, x2_2, y2_2] = box2;
+        
+        // Calcular área de intersección
+        const xLeft = Math.max(x1_1, x1_2);
+        const yTop = Math.max(y1_1, y1_2);
+        const xRight = Math.min(x2_1, x2_2);
+        const yBottom = Math.min(y2_1, y2_2);
+        
+        if (xRight < xLeft || yBottom < yTop) return 0.0;
+        
+        const intersectionArea = (xRight - xLeft) * (yBottom - yTop);
+        
+        // Calcular áreas de cada box
+        const box1Area = (x2_1 - x1_1) * (y2_1 - y1_1);
+        const box2Area = (x2_2 - x1_2) * (y2_2 - y1_2);
+        
+        // IoU = intersección / unión
+        const iou = intersectionArea / (box1Area + box2Area - intersectionArea);
+        return iou;
+    }
+    
     function trackUniqueScrew(detection) {
         const newCenter = getCenter(detection.box);
         
-        // Verificar si este tornillo ya está trackeado
+        // Verificar si este tornillo ya está trackeado usando DISTANCIA + IoU
         const existingScrew = trackedScrews.find(tracked => {
             const distance = calculateDistance(newCenter, tracked.center);
-            return distance < DISTANCE_THRESHOLD;
+            const iou = calculateIoU(detection.box, tracked.box);
+            
+            // Considerar el mismo tornillo si:
+            // - Está cerca (distancia < threshold) O
+            // - Tiene alta superposición (IoU > 0.3)
+            const isSame = distance < DISTANCE_THRESHOLD || iou > 0.3;
+            
+            if (isSame) {
+                console.log(`🔗 Mismo tornillo detectado - Distancia: ${distance.toFixed(0)}px, IoU: ${(iou * 100).toFixed(1)}%`);
+            }
+            
+            return isSame;
         });
         
         if (existingScrew) {
@@ -450,6 +526,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return false; // No es nuevo
         } else {
             // Agregar nuevo tornillo único
+            console.log(`🆕 Nuevo tornillo único detectado en pos [${newCenter.x.toFixed(0)}, ${newCenter.y.toFixed(0)}]`);
             trackedScrews.push({
                 center: newCenter,
                 box: detection.box,

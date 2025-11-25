@@ -35,21 +35,36 @@ class YOLODetector:
     def detect(self, frame):
         """
         Realiza la detección en un frame de imagen.
+        Parámetros optimizados para mejorar detección de tornillos pequeños.
         """
-        results = self.model(frame, verbose=False) # Añadimos verbose=False para una salida más limpia
-        detections = []
-        
-        for result in results:
-            boxes = result.boxes
-            for box in boxes:
-                x1, y1, x2, y2 = box.xyxy[0]
-                confidence = box.conf[0]
-                cls = box.cls[0]
-                
-                detections.append({
-                    "box": [int(x1), int(y1), int(x2), int(y2)],
-                    "confidence": float(confidence),
-                    "class_name": self.model.names[int(cls)]
-                })
-        
-        return detections
+        try:
+            # Configuración optimizada para detección de objetos pequeños
+            results = self.model(
+                frame, 
+                verbose=False,           # Salida limpia
+                conf=0.10,               # Umbral de confianza muy bajo - filtrado se hace en frontend
+                iou=0.45,                # Non-Maximum Suppression - evitar superposiciones
+                max_det=300,             # Máximo de detecciones permitidas
+                imgsz=640                # Tamaño de imagen para inferencia
+            )
+            detections = []
+            
+            for result in results:
+                boxes = result.boxes
+                for box in boxes:
+                    x1, y1, x2, y2 = box.xyxy[0]
+                    confidence = box.conf[0]
+                    cls = box.cls[0]
+                    
+                    detections.append({
+                        "box": [int(x1), int(y1), int(x2), int(y2)],
+                        "confidence": float(confidence),
+                        "class_name": self.model.names[int(cls)]
+                    })
+            
+            return detections
+        except Exception as e:
+            print(f"❌ Error en detección YOLO: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return []

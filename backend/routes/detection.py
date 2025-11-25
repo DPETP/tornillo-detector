@@ -22,19 +22,59 @@ def load_active_model():
     """Carga el modelo activo desde la base de datos"""
     global yolo_detector, active_engine, model_loaded
     try:
+        print("🔄 Intentando cargar motor de IA desde la base de datos...")
         engine = InferenceEngine.query.filter_by(activo=True).first()
+        
         if engine and engine.ruta_archivo:
+            print(f"📁 Motor encontrado: {engine.tipo} v{engine.version}")
+            print(f"📂 Ruta del archivo: {engine.ruta_archivo}")
+            
             yolo_detector = YOLODetector(model_filename=engine.ruta_archivo)
             active_engine = engine
             model_loaded = True
-            print(f"✓ Modelo activo cargado: {engine.tipo} v{engine.version}")
+            print(f"✅ Modelo activo cargado exitosamente: {engine.tipo} v{engine.version}")
         else:
-            print("⚠ No hay motor de IA activo configurado")
+            print("⚠️ No hay motor de IA activo configurado en la base de datos")
+            print("💡 Ve a Configuración → Motores de IA y activa uno")
+            yolo_detector = None
+            active_engine = None
             model_loaded = True
     except Exception as e:
-        print(f"ERROR: No se pudo cargar el modelo. {e}")
+        import traceback
+        print(f"❌ ERROR al cargar el modelo:")
+        print(f"   Mensaje: {str(e)}")
+        print(f"   Traceback completo:")
+        traceback.print_exc()
         yolo_detector = None
+        active_engine = None
         model_loaded = True
+
+# --- RUTA DE DIAGNÓSTICO: VERIFICAR ESTADO DEL MODELO ---
+@detection_bp.route('/model-status', methods=['GET'])
+@jwt_required()
+def get_model_status():
+    """Devuelve el estado actual del modelo de detección"""
+    global model_loaded, yolo_detector, active_engine
+    
+    # Intentar cargar si no se ha intentado
+    if not model_loaded:
+        load_active_model()
+    
+    status = {
+        'model_loaded_attempted': model_loaded,
+        'detector_initialized': yolo_detector is not None,
+        'active_engine': None
+    }
+    
+    if active_engine:
+        status['active_engine'] = {
+            'id': active_engine.id,
+            'tipo': active_engine.tipo,
+            'version': active_engine.version,
+            'ruta_archivo': active_engine.ruta_archivo
+        }
+    
+    return jsonify(success=True, data=status)
 
 # --- RUTA NUEVA: OBTENER CONFIGURACIÓN ---
 @detection_bp.route('/config', methods=['GET'])
@@ -164,21 +204,18 @@ def change_active_engine(engine_id):
 @detection_bp.route('/active-engine', methods=['GET'])
 @jwt_required()
 def get_active_engine_info():
-    """Devuelve información del motor actualmente activo"""
-    global model_loaded
+    """Devuelve información del motor actualmente activo en la BD"""
+    # SIEMPRE consultar la BD directamente, no confiar en variable global
+    engine = InferenceEngine.query.filter_by(activo=True).first()
     
-    # Cargar modelo si aún no se ha intentado
-    if not model_loaded:
-        load_active_model()
-    
-    if active_engine:
+    if engine:
         return jsonify(success=True, data={
-            'id': active_engine.id,
-            'tipo': active_engine.tipo,
-            'version': active_engine.version,
-            'descripcion': active_engine.descripcion,
-            'ruta_archivo': active_engine.ruta_archivo
+            'id': engine.id,
+            'tipo': engine.tipo,
+            'version': engine.version,
+            'descripcion': engine.descripcion,
+            'ruta_archivo': engine.ruta_archivo
         })
     else:
-        # Retornar 200 con success=False en lugar de 404
+        # No hay motor activo en BD
         return jsonify(success=False, message='No hay motor activo. Por favor, active uno desde Configuración.'), 200

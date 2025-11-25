@@ -429,6 +429,19 @@ body::before {
     transition: all 0.3s;
 }
 
+/* Estilos específicos para opciones de select */
+.form-group select option {
+    background: #1a1a2e;
+    color: #ffffff;
+    padding: 10px;
+}
+
+.form-group select option:hover,
+.form-group select option:checked {
+    background: #0052a3;
+    color: #ffffff;
+}
+
 .form-group input::placeholder,
 .form-group textarea::placeholder {
     color: rgba(255, 255, 255, 0.4);
