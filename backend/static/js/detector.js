@@ -382,53 +382,56 @@ document.addEventListener('DOMContentLoaded', () => {
                 lastDetections = filteredDetections;
                 
                 // 6. TRACKING: Registrar tornillos únicos (solo los trackables)
-                // RESTRICCIÓN: Solo agregar nuevos si no hemos alcanzado el target
-                let newScrewsFound = 0;
-                const currentConfirmedCount = getConfirmedScrewsCount();
-                
+                // RESTRICCIÓN ESTRICTA: Solo trackear hasta alcanzar el target
                 trackableDetections.forEach(det => {
-                    // Solo intentar trackear si aún no alcanzamos el target
-                    if (currentConfirmedCount < config.target_tornillos) {
-                        const isNew = trackUniqueScrew(det);
-                        if (isNew) {
-                            newScrewsFound++;
-                            console.log(`🆕 Nuevo tornillo agregado (${currentConfirmedCount + newScrewsFound}/${config.target_tornillos})`);
-                        }
+                    const newCenter = getCenter(det.box);
+                    
+                    // Buscar si ya existe este tornillo
+                    const existingScrew = trackedScrews.find(tracked => {
+                        const distance = calculateDistance(newCenter, tracked.center);
+                        const iou = calculateIoU(det.box, tracked.box);
+                        return distance < DISTANCE_THRESHOLD || iou > 0.3;
+                    });
+                    
+                    if (existingScrew) {
+                        // Actualizar tornillo existente (siempre)
+                        existingScrew.center = newCenter;
+                        existingScrew.box = det.box;
+                        existingScrew.confidence = Math.max(existingScrew.confidence, det.confidence);
+                        existingScrew.lastSeen = Date.now();
+                        existingScrew.detectionCount++;
                     } else {
-                        // Ya alcanzamos el target, solo actualizar tornillos existentes
-                        const newCenter = getCenter(det.box);
-                        const existingScrew = trackedScrews.find(tracked => {
-                            const distance = calculateDistance(newCenter, tracked.center);
-                            const iou = calculateIoU(det.box, tracked.box);
-                            return distance < DISTANCE_THRESHOLD || iou > 0.3;
-                        });
+                        // Es un tornillo nuevo, verificar si podemos agregarlo
+                        const currentConfirmedCount = getConfirmedScrewsCount();
                         
-                        if (existingScrew) {
-                            // Actualizar tornillo existente
-                            existingScrew.center = newCenter;
-                            existingScrew.box = det.box;
-                            existingScrew.confidence = Math.max(existingScrew.confidence, det.confidence);
-                            existingScrew.lastSeen = Date.now();
-                            existingScrew.detectionCount++;
+                        if (currentConfirmedCount < config.target_tornillos) {
+                            // Aún no alcanzamos el límite, agregarlo
+                            console.log(`🆕 Nuevo tornillo agregado (${currentConfirmedCount + 1}/${config.target_tornillos}) en pos [${newCenter.x.toFixed(0)}, ${newCenter.y.toFixed(0)}]`);
+                            trackedScrews.push({
+                                center: newCenter,
+                                box: det.box,
+                                confidence: det.confidence,
+                                class_name: det.class_name,
+                                firstSeen: Date.now(),
+                                lastSeen: Date.now(),
+                                detectionCount: 1
+                            });
+                        } else {
+                            // Ya alcanzamos el límite, ignorar este tornillo
+                            console.log(`🚫 Tornillo ignorado (límite ${config.target_tornillos} alcanzado)`);
                         }
-                        // Si no existe, lo ignoramos (ya tenemos suficientes)
                     }
                 });
                 
-                console.log(`🎯 Target: ${config.target_tornillos} | Ya confirmados: ${currentConfirmedCount} | Nuevos en este frame: ${newScrewsFound}`);
-                
-                // 7. Actualizar el contador con tornillos ÚNICOS CONFIRMADOS
+                // 7. Actualizar el contador con tornillos ÚNICOS CONFIRMADOS (con límite estricto)
                 const confirmedCount = getConfirmedScrewsCount();
                 const totalTracked = trackedScrews.length;
                 
-                // NO limitar - dejar que muestre todos los tornillos detectados
-                const finalCount = confirmedCount;
+                // LIMITAR al target para evitar excesos
+                const finalCount = Math.min(confirmedCount, config.target_tornillos);
                 
-                console.log(`🔍 Tracking: ${totalTracked} detectados, ${confirmedCount} confirmados (≥${MIN_DETECTIONS_TO_CONFIRM} veces)`);
+                console.log(`🔍 Tracking: ${totalTracked} detectados, ${confirmedCount} confirmados → MOSTRANDO: ${finalCount}/${config.target_tornillos}`);
                 
-                if (confirmedCount > config.target_tornillos) {
-                    console.warn(`⚠️ ADVERTENCIA: Se confirmaron ${confirmedCount} tornillos pero solo se esperan ${config.target_tornillos}. Limitando a ${finalCount}.`);
-                }
                 
                 // Mostrar detalles de cada tornillo trackeado
                 trackedScrews.forEach((screw, idx) => {
@@ -442,7 +445,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     maxDetectionsInCycle = finalCount;
                     updateDetectionCountUI();
                 } else {
-                    console.log(`📊 Tornillos confirmados: ${finalCount} (${filteredDetections.length} en este frame)`);
+                    console.log(`📊 Tornillos confirmados: ${finalCount} de ${config.target_tornillos} esperados`);
                 }
                 
                 // IMPORTANTE: Solicitar el siguiente frame SOLO después de procesar completamente este

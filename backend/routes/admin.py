@@ -167,9 +167,26 @@ def handle_single_ac_model(current_user_id, current_user_role, model_id):
         return jsonify(success=True, message='Modelo AA actualizado', data=model.to_dict())
 
     if request.method == 'DELETE':
-        model.activo = False  # Soft delete
+        # Verificar si es el modelo activo actualmente
+        settings = Settings.query.first()
+        if settings and settings.ac_model_activo_id == model_id:
+            return jsonify(success=False, error='No se puede eliminar el modelo activo. Selecciona otro modelo primero.'), 400
+        
+        # Eliminar permanentemente
+        db.session.delete(model)
         db.session.commit()
-        return jsonify(success=True, message='Modelo AA eliminado (desactivado)')
+        return jsonify(success=True, message=f'Modelo {model.nombre} eliminado permanentemente')
+
+@admin_bp.route('/ac-models/<int:model_id>/toggle-status', methods=['POST'])
+@config_access_required
+def toggle_ac_model_status(current_user_id, current_user_role, model_id):
+    """Activa o desactiva un modelo de AA (soft toggle)."""
+    model = ACModel.query.get_or_404(model_id)
+    model.activo = not model.activo
+    db.session.commit()
+    
+    status = "activado" if model.activo else "desactivado"
+    return jsonify(success=True, message=f'Modelo {model.nombre} {status} exitosamente.')
 
 # ============================================================
 # RUTAS: GESTIÓN DE MOTORES DE IA (REESTRUCTURADO)
