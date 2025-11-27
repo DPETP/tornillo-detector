@@ -93,7 +93,6 @@ def create_app(config_name=None):
     def internal_server_error(error):
         return jsonify(success=False, code=500, error="Internal Server Error", message="Error en el servidor"), 500
 
-    
     # ============================================================
     # RUTA "CATCH-ALL" PARA SERVIR LA SINGLE PAGE APP (SPA)
     # ============================================================

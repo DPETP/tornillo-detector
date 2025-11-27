@@ -7,7 +7,7 @@ class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
     
     # Base de datos - usar ruta relativa
-    db_path = os.path.join(os.path.dirname(__file__), 'tornillo_detector.db')
+    db_path = os.path.join(os.path.dirname(__file__), 'tornillo_dev.db')
     SQLALCHEMY_DATABASE_URI = f'sqlite:///{db_path}'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     
@@ -25,7 +25,7 @@ class Config:
     
     # Rutas
     UPLOAD_FOLDER = 'uploads'
-    MAX_CONTENT_LENGTH = 16 * 1024 * 1024
+    MAX_CONTENT_LENGTH = 200 * 1024 * 1024  # 200 MB para archivos .pt de modelos YOLO
 
 
 class DevelopmentConfig(Config):

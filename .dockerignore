@@ -1,0 +1,83 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Logs
+*.log
+logs/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Distribución
+dist/
+build/
+*.egg-info/
+
+# Docker
+.dockerignore
+docker-compose.override.yml
+
+# Archivos temporales
+*.tmp
+*.bak
+*.swp
+
+# Node (si aplica)
+node_modules/
+npm-debug.log
+
+# Documentación de desarrollo
+README.md
+CONTRIBUTING.md
+docs/
+
+# Scripts de desarrollo
+check_model.py
+fix_*.py
+activate_model.py
+test_model_load.py
+
+# Datos sensibles
+.env
+*.pem
+*.key
+
+# Base de datos local
+*.db
+*.sqlite
+*.sqlite3
+
+# Archivos grandes que no se incluyen
+backend/uploads/*.pt
+!backend/uploads/.gitkeep
+
+# Archivos de estructura
+estructura.txt
+estructuraResumen.txt

@@ -8,16 +8,73 @@ import base64
 import numpy as np
 
 # Importaciones actualizadas
-from ..database.models import db, Detection, ACModel, Settings
+from ..database.models import db, Detection, ACModel, Settings, InferenceEngine
 from ..vision.detector import YOLODetector
 
 detection_bp = Blueprint('detection', __name__)
 
-try:
-    yolo_detector = YOLODetector()
-except FileNotFoundError as e:
-    print(f"ERROR CRÍTICO: El archivo del modelo YOLO no se encontró. {e}")
-    yolo_detector = None
+# Variable global para almacenar el detector activo
+yolo_detector = None
+active_engine = None
+model_loaded = False
+
+def load_active_model():
+    """Carga el modelo activo desde la base de datos"""
+    global yolo_detector, active_engine, model_loaded
+    try:
+        print("🔄 Intentando cargar motor de IA desde la base de datos...")
+        engine = InferenceEngine.query.filter_by(activo=True).first()
+        
+        if engine and engine.ruta_archivo:
+            print(f"📁 Motor encontrado: {engine.tipo} v{engine.version}")
+            print(f"📂 Ruta del archivo: {engine.ruta_archivo}")
+            
+            yolo_detector = YOLODetector(model_filename=engine.ruta_archivo)
+            active_engine = engine
+            model_loaded = True
+            print(f"✅ Modelo activo cargado exitosamente: {engine.tipo} v{engine.version}")
+        else:
+            print("⚠️ No hay motor de IA activo configurado en la base de datos")
+            print("💡 Ve a Configuración → Motores de IA y activa uno")
+            yolo_detector = None
+            active_engine = None
+            model_loaded = True
+    except Exception as e:
+        import traceback
+        print(f"❌ ERROR al cargar el modelo:")
+        print(f"   Mensaje: {str(e)}")
+        print(f"   Traceback completo:")
+        traceback.print_exc()
+        yolo_detector = None
+        active_engine = None
+        model_loaded = True
+
+# --- RUTA DE DIAGNÓSTICO: VERIFICAR ESTADO DEL MODELO ---
+@detection_bp.route('/model-status', methods=['GET'])
+@jwt_required()
+def get_model_status():
+    """Devuelve el estado actual del modelo de detección"""
+    global model_loaded, yolo_detector, active_engine
+    
+    # Intentar cargar si no se ha intentado
+    if not model_loaded:
+        load_active_model()
+    
+    status = {
+        'model_loaded_attempted': model_loaded,
+        'detector_initialized': yolo_detector is not None,
+        'active_engine': None
+    }
+    
+    if active_engine:
+        status['active_engine'] = {
+            'id': active_engine.id,
+            'tipo': active_engine.tipo,
+            'version': active_engine.version,
+            'ruta_archivo': active_engine.ruta_archivo
+        }
+    
+    return jsonify(success=True, data=status)
 
 # --- RUTA NUEVA: OBTENER CONFIGURACIÓN ---
 @detection_bp.route('/config', methods=['GET'])
@@ -44,6 +101,12 @@ def get_detection_config():
 @jwt_required()
 def process_frame():
     """Recibe un frame, lo procesa con YOLO y devuelve las detecciones crudas."""
+    global model_loaded
+    
+    # Cargar el modelo en el primer request si no está cargado
+    if not model_loaded:
+        load_active_model()
+    
     if yolo_detector is None:
         return jsonify(success=False, error="El modelo de detección no está cargado en el servidor."), 500
 
@@ -93,3 +156,66 @@ def save_inspection_result():
     db.session.add(new_inspection)
     db.session.commit()
     return jsonify(success=True, message="Inspección guardada correctamente.", id=new_inspection.id), 201
+
+# --- RUTA NUEVA: OBTENER MOTORES ACTIVOS ---
+@detection_bp.route('/available-engines', methods=['GET'])
+@jwt_required()
+def get_available_engines():
+    """Devuelve la lista de motores de IA disponibles para selección"""
+    engines = InferenceEngine.query.filter_by(activo=True).all()
+    return jsonify(success=True, data=[{
+        'id': e.id,
+        'tipo': e.tipo,
+        'version': e.version,
+        'descripcion': e.descripcion,
+        'activo': e.activo
+    } for e in engines])
+
+# --- RUTA NUEVA: CAMBIAR MOTOR ACTIVO ---
+@detection_bp.route('/change-engine/<int:engine_id>', methods=['POST'])
+@jwt_required()
+def change_active_engine(engine_id):
+    """Cambia el motor de IA activo y recarga el detector"""
+    global yolo_detector, active_engine, model_loaded
+    
+    # Desactivar todos los motores
+    InferenceEngine.query.update({'activo': False})
+    db.session.commit()
+    
+    # Activar el motor seleccionado
+    engine = InferenceEngine.query.get_or_404(engine_id)
+    engine.activo = True
+    db.session.commit()
+    
+    # FORZAR recarga del detector (resetear flag)
+    model_loaded = False
+    yolo_detector = None
+    active_engine = None
+    
+    # Recargar el detector
+    load_active_model()
+    
+    if yolo_detector:
+        return jsonify(success=True, message=f'Motor {engine.tipo} v{engine.version} activado y cargado')
+    else:
+        return jsonify(success=False, error='Error al cargar el nuevo motor'), 500
+
+# --- RUTA NUEVA: INFO DEL MOTOR ACTIVO ---
+@detection_bp.route('/active-engine', methods=['GET'])
+@jwt_required()
+def get_active_engine_info():
+    """Devuelve información del motor actualmente activo en la BD"""
+    # SIEMPRE consultar la BD directamente, no confiar en variable global
+    engine = InferenceEngine.query.filter_by(activo=True).first()
+    
+    if engine:
+        return jsonify(success=True, data={
+            'id': engine.id,
+            'tipo': engine.tipo,
+            'version': engine.version,
+            'descripcion': engine.descripcion,
+            'ruta_archivo': engine.ruta_archivo
+        })
+    else:
+        # No hay motor activo en BD
+        return jsonify(success=False, message='No hay motor activo. Por favor, active uno desde Configuración.'), 200

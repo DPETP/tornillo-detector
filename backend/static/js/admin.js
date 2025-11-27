@@ -9,6 +9,38 @@ document.addEventListener('DOMContentLoaded', () => {
     const API_URL = '/api/admin';
     const authToken = localStorage.getItem('accessToken');
 
+    // Función para aplicar permisos según el rol - DEFINITIVO
+    function applyRolePermissions() {
+        try {
+            const user = JSON.parse(localStorage.getItem('user'));
+            if (!user || !user.role) return;
+
+            console.log(`Aplicando permisos para rol: ${user.role}`);
+
+            // OPERARIO: No tiene acceso a configuración, redirigir inmediatamente
+            if (user.role === 'operario') {
+                console.warn('Operario sin permisos, redirigiendo a detección...');
+                window.location.href = '/detection';
+                return;
+            }
+
+            // SOPORTE TÉCNICO: Ocultar sección de Motores IA
+            if (user.role === 'soporte_tecnico') {
+                const motoresMenuItem = document.querySelector('[data-section="motores"]');
+                const motoresSection = document.getElementById('motores');
+                
+                if (motoresMenuItem) motoresMenuItem.style.display = 'none';
+                if (motoresSection) motoresSection.style.display = 'none';
+
+                console.log('Sección de Motores IA ocultada para Soporte Técnico');
+            }
+
+            // ADMIN: Tiene acceso completo (no se oculta nada)
+        } catch (error) {
+            console.error('Error aplicando permisos de rol:', error);
+        }
+    }
+
     // Función principal para iniciar todo
     async function initializeApp() {
         // Asignamos los listeners PRIMERO. Si falla aquí, sabremos por qué.
@@ -20,6 +52,9 @@ document.addEventListener('DOMContentLoaded', () => {
             showAlert("Error grave en la interfaz. Contacte a soporte.", "danger");
             return; // Detener la ejecución si la UI básica no funciona
         }
+        
+        // Aplicar permisos de rol antes de cargar datos
+        applyRolePermissions();
         
         // LUEGO cargamos todos los datos y renderizamos
         await api.reloadData();
@@ -78,8 +113,21 @@ document.addEventListener('DOMContentLoaded', () => {
             },
             'delete-user': () => { if (confirm('¡ADVERTENCIA! ¿ELIMINAR usuario permanentemente?')) api.deleteUser(id); },
             'edit-model': () => openModal('modelModal', state.allModels.find(m => m.id === id)),
-            'delete-model': () => { if (confirm('¿Eliminar (desactivar) modelo?')) api.deleteModel(id); },
+            'toggle-model-status': () => {
+                const model = state.allModels.find(m => m.id === id);
+                if (confirm(`¿${model.activo ? 'Desactivar' : 'Activar'} modelo ${model.nombre}?`)) api.toggleModelStatus(id);
+            },
+            'delete-model': () => { 
+                const model = state.allModels.find(m => m.id === id);
+                if (confirm(`¡ADVERTENCIA! ¿Eliminar permanentemente el modelo ${model.nombre}?\n\nEsta acción no se puede deshacer.`)) api.deleteModel(id); 
+            },
             'activate-engine': () => api.activateEngine(id),
+            'delete-engine': () => {
+                const engine = state.allEngines.find(e => e.id === id);
+                if (confirm(`¿Eliminar motor ${engine.tipo} v${engine.version}?\n\nEsto eliminará el registro y el archivo de entrenamiento (.pt/.pth/.weights) permanentemente.`)) {
+                    api.deleteEngine(id);
+                }
+            },
         };
         if (actions[action]) actions[action]();
     }
@@ -104,8 +152,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function showAlert(message, type = 'success') { const container = document.getElementById('alerts-container'); const alertDiv = document.createElement('div'); alertDiv.className = `alert alert-${type}`; alertDiv.textContent = message; container.appendChild(alertDiv); setTimeout(() => alertDiv.remove(), 4000); }
     function renderAll() {
         const usuariosTbody = document.getElementById('usuarios-tbody'); if (usuariosTbody) usuariosTbody.innerHTML = state.allUsers.map(user => { const isActive = user.is_active; const toggleButtonClass = isActive ? 'warning' : 'success'; const toggleButtonText = isActive ? 'Desactivar' : 'Activar'; return `<tr><td>${user.username}</td><td>${user.email}</td><td>${user.role}</td><td>${user.team}</td><td><span class="badge ${isActive ? 'success' : 'danger'}">${isActive ? 'Activo' : 'Inactivo'}</span></td><td><button class="btn btn-sm" data-action="edit-user" data-id="${user.id}">Editar</button><button class="btn btn-sm ${toggleButtonClass}" data-action="toggle-user-status" data-id="${user.id}">${toggleButtonText}</button><button class="btn btn-sm danger" data-action="delete-user" data-id="${user.id}">Eliminar</button></td></tr>`; }).join('');
-        const motoresTbody = document.getElementById('motores-tbody'); if (motoresTbody) motoresTbody.innerHTML = state.allEngines.map(engine => `<tr><td>${engine.tipo}</td><td>${engine.version}</td><td>${(engine.tamaño_archivo / 1024 / 1024).toFixed(2)}</td><td><span class="badge ${engine.activo ? 'success' : 'warning'}">${engine.activo ? 'Activo' : 'Inactivo'}</span></td><td>${!engine.activo ? `<button class="btn btn-sm success" data-action="activate-engine" data-id="${engine.id}">Activar</button>` : '<span>✓ Activo</span>'}</td></tr>`).join('');
-        const modelosTbody = document.getElementById('modelos-tbody'); if (modelosTbody) { const activeModelId = state.settings.ac_model_activo_id; modelosTbody.innerHTML = state.allModels.map(model => { const isCurrentlyActive = model.id === activeModelId; const activeIndicator = isCurrentlyActive ? '<span class="active-indicator">★ En Uso</span>' : ''; return `<tr><td>${model.nombre} ${activeIndicator}</td><td>${model.target_tornillos}</td><td>${model.confidence_threshold}</td><td>${model.inspection_cycle_time}s</td><td>${state.allEngines.find(e => e.id === model.motor_inferencia_id)?.tipo || 'N/A'}</td><td><span class="badge ${model.activo ? 'success' : 'danger'}">${model.activo ? 'Activo' : 'Inactivo'}</span></td><td><button class="btn btn-sm" data-action="edit-model" data-id="${model.id}">Editar</button><button class="btn btn-sm danger" data-action="delete-model" data-id="${model.id}">Eliminar</button></td></tr>`; }).join('');}
+        const motoresTbody = document.getElementById('motores-tbody'); if (motoresTbody) motoresTbody.innerHTML = state.allEngines.map(engine => `<tr><td>${engine.tipo}</td><td>${engine.version}</td><td>${(engine.tamaño_archivo / 1024 / 1024).toFixed(2)}</td><td><span class="badge ${engine.activo ? 'success' : 'warning'}">${engine.activo ? 'Activo' : 'Inactivo'}</span></td><td>${!engine.activo ? `<button class="btn btn-sm success" data-action="activate-engine" data-id="${engine.id}">Activar</button> <button class="btn btn-sm danger" data-action="delete-engine" data-id="${engine.id}">Eliminar</button>` : '<span>✓ Activo</span>'}</td></tr>`).join('');
+        const modelosTbody = document.getElementById('modelos-tbody'); if (modelosTbody) { const activeModelId = state.settings.ac_model_activo_id; modelosTbody.innerHTML = state.allModels.map(model => { const isCurrentlyActive = model.id === activeModelId; const activeIndicator = isCurrentlyActive ? '<span class="active-indicator">★ En Uso</span>' : ''; const isActive = model.activo; const toggleButtonClass = isActive ? 'warning' : 'success'; const toggleButtonText = isActive ? 'Desactivar' : 'Activar'; return `<tr><td>${model.nombre} ${activeIndicator}</td><td>${model.target_tornillos}</td><td>${model.confidence_threshold}</td><td>${model.inspection_cycle_time}s</td><td>${state.allEngines.find(e => e.id === model.motor_inferencia_id)?.tipo || 'N/A'}</td><td><span class="badge ${isActive ? 'success' : 'danger'}">${isActive ? 'Activo' : 'Inactivo'}</span></td><td><button class="btn btn-sm" data-action="edit-model" data-id="${model.id}">Editar</button><button class="btn btn-sm ${toggleButtonClass}" data-action="toggle-model-status" data-id="${model.id}">${toggleButtonText}</button><button class="btn btn-sm danger" data-action="delete-model" data-id="${model.id}">Eliminar</button></td></tr>`; }).join('');}
         const motorSelect = document.getElementById('motor-select'); if (motorSelect) motorSelect.innerHTML = `<option value="">-- Seleccionar --</option>` + state.allEngines.map(e => `<option value="${e.id}">${e.tipo} v${e.version}</option>`).join('');
         const modeloActivoSelect = document.getElementById('modelo-activo'); if (modeloActivoSelect) { modeloActivoSelect.innerHTML = `<option value="">-- Seleccionar --</option>` + state.allModels.filter(m => m.activo).map(m => `<option value="${m.id}">${m.nombre}</option>`).join(''); if (state.settings.ac_model_activo_id) modeloActivoSelect.value = state.settings.ac_model_activo_id; }
     }
@@ -118,8 +166,10 @@ document.addEventListener('DOMContentLoaded', () => {
         saveEngine: async (formData) => { const result = await api.makeRequest('/inference-engines', 'POST', formData, true); if (result) { document.getElementById('engineModal').classList.remove('active'); showAlert(result.message || 'Motor cargado.'); await api.reloadData(); } },
         toggleUserStatus: async (id) => { const result = await api.makeRequest(`/users/${id}/toggle-status`, 'POST'); if (result) { showAlert(result.message); await api.reloadData(); } },
         deleteUser: async (id) => { const result = await api.makeRequest(`/users/${id}`, 'DELETE'); if (result) { showAlert(result.message); await api.reloadData(); } },
-        deleteModel: async (id) => { const result = await api.makeRequest(`/ac-models/${id}`, 'DELETE'); if (result) { showAlert('Modelo eliminado (desactivado).'); await api.reloadData(); } },
+        toggleModelStatus: async (id) => { const result = await api.makeRequest(`/ac-models/${id}/toggle-status`, 'POST'); if (result) { showAlert(result.message); await api.reloadData(); } },
+        deleteModel: async (id) => { const result = await api.makeRequest(`/ac-models/${id}`, 'DELETE'); if (result) { showAlert('Modelo eliminado permanentemente.'); await api.reloadData(); } },
         activateEngine: async (id) => { const result = await api.makeRequest(`/inference-engines/${id}/activate`, 'POST'); if (result) { showAlert(result.message); await api.reloadData(); } },
+        deleteEngine: async (id) => { const result = await api.makeRequest(`/inference-engines/${id}`, 'DELETE'); if (result) { showAlert(result.message); await api.reloadData(); } },
     };
     
     initializeApp();

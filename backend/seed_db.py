@@ -6,11 +6,17 @@ Crea usuarios por defecto y configuración inicial
 import sys
 import os
 
-# Agregar el directorio backend al path de Python
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+# --- CORRECCIÓN DE ARQUITECTURA ---
+# Obtenemos la ruta de la carpeta actual (backend) y la del padre (raíz del proyecto).
+# Agregamos el padre al sistema para que Python pueda importar 'backend' como un paquete completo.
+# Esto soluciona el error de "attempted relative import" en app.py definitivamente.
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, parent_dir)
 
-from app import create_app
-from database.models import db, User, Settings, SystemLog
+# Importaciones corregidas usando la ruta absoluta del paquete 'backend'
+from backend.app import create_app
+from backend.database.models import db, User, Settings, SystemLog
 from werkzeug.security import generate_password_hash
 
 
@@ -25,6 +31,12 @@ def seed_database():
         print("=" * 70)
         
         try:
+            # --- PASO CRÍTICO: CREACIÓN DE TABLAS ---
+            # Como es una base de datos nueva (tornillo_dev.db), las tablas no existen.
+            # Esto las crea basándose en tus modelos antes de insertar datos.
+            db.create_all()
+            print("✓ Estructura de tablas creada correctamente")
+
             # ========================================================
             # 1. CREAR USUARIO ADMINISTRADOR
             # ========================================================

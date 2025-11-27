@@ -25,4 +25,4 @@ __pycache__/
 *.rar
 *.tar
 *.gz
-"@ | Out-File -Encoding utf8 .gitignore
+"@ | Out-File -Encoding utf8 .gitignoredist/
