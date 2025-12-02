@@ -348,7 +348,7 @@ Las contribuciones son bienvenidas. Por favor:
 
 ## 📄 Licencia
 
-© 2025 BGH - Sistema Propietario de Inspección Automatizada
+© 2025 - Sistema de Inspección Automatizada
 
 ---
 
@@ -356,16 +356,13 @@ Las contribuciones son bienvenidas. Por favor:
 
 - **Documentación:** Ver [INSTALL.md](INSTALL.md) para guía completa
 - **Issues:** https://github.com/DPETP/tornillo-detector/issues
-- **Email:** soporte@bgh.com.ar
+
 
 ---
 
 ## 🎓 Créditos
 
-Desarrollado por el equipo de Ingeniería de BGH utilizando:
-- [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics)
-- [Flask Framework](https://flask.palletsprojects.com/)
-- [OpenCV](https://opencv.org/)
+Agradecemos al Equipo de equipo de automatización de BGH:
 
 ---
 
